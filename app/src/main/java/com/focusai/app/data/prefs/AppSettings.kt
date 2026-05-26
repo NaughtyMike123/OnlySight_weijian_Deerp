@@ -26,7 +26,7 @@ data class AppSettings(
 
 const val DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
 const val DEFAULT_MODEL = "deepseek-chat"
-const val GITHUB_ISSUES_URL = "https://github.com/your-username/focusai/issues"
+const val GITHUB_ISSUES_URL = "https://github.com/NaughtyMike123/OnlySight_weijian_Deerp/issues"
 
 /**
  * 默认专注目标 —— 用户在首页可以随时改成自己的目标。

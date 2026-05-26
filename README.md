@@ -67,7 +67,7 @@ com.focusai.app/
    - `git add .`
    - `git commit -m "chore: initial release of OnlySight"`
    - `git branch -M main`
-   - `git remote add origin <your-repo-url>`
+   - `git remote add origin https://github.com/NaughtyMike123/OnlySight_weijian_Deerp.git`
    - `git push -u origin main`
 3. 将 `GITHUB_ISSUES_URL` 改成你的真实仓库地址
 
