@@ -58,22 +58,6 @@ com.focusai.app/
 ├── util/
 └── viewmodel/
 ```
-
-<<<<<<< HEAD
-## 上传 GitHub（建议流程）
-
-1. 在 GitHub 新建空仓库（不要勾选初始化 README）
-2. 本地执行：
-   - `git init`
-   - `git add .`
-   - `git commit -m "chore: initial release of OnlySight"`
-   - `git branch -M main`
-   - `git remote add origin https://github.com/NaughtyMike123/OnlySight_weijian_Deerp.git`
-   - `git push -u origin main`
-3. 将 `GITHUB_ISSUES_URL` 改成你的真实仓库地址
-=======
->>>>>>> 4f78f3f5ffd6a8df34a1def8ad04f3796b996688
-
 ## 分享给朋友
 
 - 方式 1：直接发 APK（`app/build/outputs/apk/debug/app-debug.apk`）
