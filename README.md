@@ -78,6 +78,17 @@ com.focusai.app/
 - 请仅使用可信 API 服务商
 - 不要在仓库提交 API Key、签名文件、`local.properties`
 
+## 支持作者 / Support the author
+
+如果觉得唯见对你有帮助，欢迎扫码请作者喝杯咖啡 ☕  
+你的支持是持续维护的动力。
+
+<p align="center">
+  <img src="docs/donate_qr.png" alt="Deerp 的赞赏码" width="260" />
+  <br/>
+  <sub>Deerp 的赞赏码</sub>
+</p>
+
 ## 许可证
 
 本项目采用 [MIT License](./LICENSE)。

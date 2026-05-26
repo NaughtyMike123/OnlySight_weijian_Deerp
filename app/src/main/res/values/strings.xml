@@ -76,7 +76,8 @@
     <string name="lang_chinese">中文</string>
     <string name="lang_english">English</string>
     <string name="donate_title">支持开发者</string>
-    <string name="donate_placeholder">赞助二维码占位符\n（可替换为实际图片）</string>
+    <string name="donate_message">如果觉得唯见对你的自律有帮助，欢迎扫码请作者喝杯咖啡 ☕\n你的支持是持续维护的动力</string>
+    <string name="donate_qr_desc">作者赞赏码</string>
     <string name="donate_close">关闭</string>
 
     <!-- Service -->

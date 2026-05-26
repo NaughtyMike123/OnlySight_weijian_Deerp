@@ -76,7 +76,8 @@
     <string name="lang_chinese">中文</string>
     <string name="lang_english">English</string>
     <string name="donate_title">Support developer</string>
-    <string name="donate_placeholder">Donation QR placeholder\n(replace with actual image)</string>
+    <string name="donate_message">If OnlySight helps you stay focused, scan the QR to buy the author a coffee ☕\nYour support keeps this project alive.</string>
+    <string name="donate_qr_desc">Author donation QR</string>
     <string name="donate_close">Close</string>
 
     <!-- Service -->
