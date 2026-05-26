@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppCompatActivity 必须使用 AppCompat/MaterialComponents 主题，避免启动闪退 -->
+    <style name="Theme.FocusAI" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>
