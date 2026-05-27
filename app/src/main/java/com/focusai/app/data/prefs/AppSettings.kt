@@ -24,8 +24,10 @@ data class AppSettings(
     val customPromptTemplate: String = DEFAULT_PROMPT_TEMPLATE
 )
 
-const val DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
-const val DEFAULT_MODEL = "deepseek-chat"
+// 视觉版默认指向豆包（火山方舟）OpenAI 兼容端点。
+// 用户依然可以在「设置」里改成其它兼容 VLM（例如 OpenAI / Qwen-VL）。
+const val DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+const val DEFAULT_MODEL = "doubao-1-5-vision-pro-32k-250115"
 const val GITHUB_ISSUES_URL = "https://github.com/NaughtyMike123/OnlySight_weijian_Deerp/issues"
 
 /**

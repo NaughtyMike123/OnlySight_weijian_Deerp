@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OnlySight</string>
-    <string name="accessibility_service_description">Reads on-screen text for AI productivity monitoring. Works only when supervision is enabled; text is sent to your configured API for analysis.</string>
+    <string name="accessibility_service_description">Lets OnlySight return you to the home screen when the visual model detects entertainment. This service does NOT read on-screen text.</string>
 
     <!-- Tab -->
     <string name="tab_focus">Focus</string>
@@ -50,11 +50,11 @@
     <!-- Settings -->
     <string name="settings_title">API Settings</string>
     <string name="settings_base_url">Base URL</string>
-    <string name="settings_base_url_hint">https://api.deepseek.com/v1</string>
+    <string name="settings_base_url_hint">https://ark.cn-beijing.volces.com/api/v3</string>
     <string name="settings_api_key">API Key</string>
     <string name="settings_api_key_hint">sk-...</string>
     <string name="settings_model">Model Name</string>
-    <string name="settings_model_hint">deepseek-chat</string>
+    <string name="settings_model_hint">doubao-1-5-vision-pro-32k-250115</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Settings saved</string>
     <string name="settings_test_connection">Test connection</string>
@@ -84,6 +84,13 @@
     <string name="intercept_toast">Entertainment detected — returned to home</string>
     <string name="intercept_notification_title">OnlySight interruption</string>
     <string name="intercept_notification_body">Entertainment detected. Returned to home. #%1$d today.</string>
+    <string name="visual_supervision_notification_title">OnlySight visual supervision</string>
+    <string name="visual_supervision_notification_body">Capturing one frame every 4s for the vision model.</string>
+    <string name="visual_supervision_channel_name">Visual supervision</string>
+    <string name="visual_supervision_channel_description">Foreground service status, cannot be disabled while running.</string>
+    <string name="visual_supervision_need_accessibility">Please grant OnlySight Accessibility permission first, otherwise we cannot return you to the home screen.</string>
+    <string name="visual_supervision_permission_denied">Screen-capture permission denied; supervision did not start.</string>
+    <string name="visual_supervision_grant_capture">Grant screen capture &amp; start supervision</string>
     <string name="system_prompt_zh">你是一个严格的自律监督员。请分析屏幕文本，判断用户是在「学习工作」还是在「看娱乐视频消磨时间」。娱乐回复1，正常使用回复0，仅回复数字。</string>
     <string name="system_prompt_en">You are a strict productivity monitor. Analyze the screen text and determine if the user is studying/working or watching entertainment videos. Reply with \'1\' for entertainment, \'0\' for productive use. Only reply with the number.</string>
 

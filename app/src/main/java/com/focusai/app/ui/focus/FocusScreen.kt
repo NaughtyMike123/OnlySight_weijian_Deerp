@@ -1,6 +1,11 @@
 package com.focusai.app.ui.focus
 
+import android.app.Activity
+import android.content.Context
+import android.media.projection.MediaProjectionManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -57,6 +62,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +79,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.focusai.app.R
+import com.focusai.app.service.VisualSupervisionService
 import com.focusai.app.ui.theme.Indigo500
 import com.focusai.app.ui.theme.IndigoLight
 import com.focusai.app.ui.theme.Ink200
@@ -91,6 +98,26 @@ fun FocusScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val savedLabel = stringResource(R.string.rules_saved)
+    val permissionDeniedLabel = stringResource(R.string.visual_supervision_permission_denied)
+
+    // MediaProjectionManager 与系统授权对话框 Launcher。
+    // 用户点击"开启监督"开关 → 调用 launcher.launch(...) → 系统弹出"允许录屏"对话框 →
+    // 用户同意后回调 onResult 拿到 resultCode + data，转交给 VisualSupervisionService。
+    val mediaProjectionManager = remember {
+        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    }
+    val screenCaptureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == Activity.RESULT_OK && data != null) {
+            VisualSupervisionService.start(context, result.resultCode, data)
+            viewModel.persistSupervisionEnabled(true)
+        } else {
+            Toast.makeText(context, permissionDeniedLabel, Toast.LENGTH_SHORT).show()
+            viewModel.persistSupervisionEnabled(false)
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -144,7 +171,16 @@ fun FocusScreen(
         SupervisionCard(
             supervisionEnabled = uiState.supervisionEnabled,
             accessibilityGranted = uiState.accessibilityGranted,
-            onToggle = viewModel::toggleSupervision
+            onToggle = { wantEnabled ->
+                if (wantEnabled) {
+                    // 关键路径：通过 MediaProjectionManager 弹出系统级"是否允许录屏"对话框。
+                    // 真正的 startForegroundService 发生在 onResult 回调里。
+                    screenCaptureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+                } else {
+                    VisualSupervisionService.stop(context)
+                    viewModel.persistSupervisionEnabled(false)
+                }
+            }
         )
 
         // ── System permissions section ───────────────────────────────────────

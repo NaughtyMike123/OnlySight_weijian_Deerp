@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.focusai.app.FocusAiApplication
+import com.focusai.app.service.VisualSupervisionService
 import com.focusai.app.util.AccessibilityUtils
 import com.focusai.app.util.TimeFormatter
 import kotlinx.coroutines.Job
@@ -56,11 +57,20 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.settingsFlow.collect { settings ->
                 savedFocusGoal = settings.focusGoal
                 savedForbiddenTags = settings.forbiddenTags
+
+                // 关键自愈逻辑：若设置里残留 supervisionEnabled=true 但视觉前台服务
+                // 实际未运行（典型场景：用户上次启用后杀了进程 / 重启过手机），
+                // 我们把"显示开关"置为 false，强制用户重新申请 MediaProjection。
+                val effectiveEnabled = settings.supervisionEnabled && VisualSupervisionService.running
+                if (settings.supervisionEnabled && !VisualSupervisionService.running) {
+                    settingsRepository.setSupervisionEnabled(false)
+                }
+
                 _uiState.update { current ->
                     val isFirstLoad = current.focusGoalDraft.isEmpty() &&
                         current.forbiddenTagsDraft.isEmpty()
                     current.copy(
-                        supervisionEnabled = settings.supervisionEnabled,
+                        supervisionEnabled = effectiveEnabled,
                         focusGoalDraft = if (isFirstLoad) settings.focusGoal else current.focusGoalDraft,
                         forbiddenTagsDraft = if (isFirstLoad) settings.forbiddenTags else current.forbiddenTagsDraft,
                         rulesDirty = if (isFirstLoad) false else current.rulesDirty
@@ -73,10 +83,26 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshAccessibilityStatus() {
         val granted = AccessibilityUtils.isAccessibilityServiceEnabled(getApplication())
-        _uiState.update { it.copy(accessibilityGranted = granted) }
+        // 顺手刷一下"监督开关"状态：截屏服务可能在后台被系统/MediaProjection 回收掉。
+        val currentlyRunning = VisualSupervisionService.running
+        _uiState.update { current ->
+            current.copy(
+                accessibilityGranted = granted,
+                supervisionEnabled = current.supervisionEnabled && currentlyRunning
+            )
+        }
+        if (!currentlyRunning) {
+            // 把持久化里可能残留的 true 也清掉，下次冷启动 UI 才能显示一致状态。
+            viewModelScope.launch { settingsRepository.setSupervisionEnabled(false) }
+        }
     }
 
-    fun toggleSupervision(enabled: Boolean) {
+    /**
+     * 仅落盘开关状态。
+     * 真正的"启停截屏服务"动作发生在 UI 层（FocusScreen），因为申请 MediaProjection
+     * 权限需要 Activity 上下文与 ActivityResult API。
+     */
+    fun persistSupervisionEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSupervisionEnabled(enabled)
         }
