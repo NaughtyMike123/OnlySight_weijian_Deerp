@@ -33,24 +33,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Accessibility
-import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.BatteryChargingFull
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -74,7 +67,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -87,22 +79,21 @@ import com.focusai.app.ui.theme.Ink500
 import com.focusai.app.ui.theme.Teal600
 import com.focusai.app.util.AccessibilityUtils
 import com.focusai.app.viewmodel.FocusViewModel
-import com.focusai.app.viewmodel.PomodoroMode
 
+/**
+ * 首页：监督开关 + 无障碍状态 + 监督规则草稿三件事。
+ * 番茄钟、应用名单等与监督主线无关的功能已删除。
+ */
 @Composable
-fun FocusScreen(
-    viewModel: FocusViewModel = viewModel(),
-    onNavigateAppManager: () -> Unit = {}
-) {
+fun FocusScreen(viewModel: FocusViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val savedLabel = stringResource(R.string.rules_saved)
     val permissionDeniedLabel = stringResource(R.string.visual_supervision_permission_denied)
 
-    // MediaProjectionManager 与系统授权对话框 Launcher。
-    // 用户点击"开启监督"开关 → 调用 launcher.launch(...) → 系统弹出"允许录屏"对话框 →
-    // 用户同意后回调 onResult 拿到 resultCode + data，转交给 VisualSupervisionService。
+    // 系统级"允许录屏"对话框 Launcher：
+    // 用户点击开关 → launch(...) → 系统弹窗 → 同意后回到 onResult，把凭据交给前台服务。
     val mediaProjectionManager = remember {
         context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
     }
@@ -142,7 +133,6 @@ fun FocusScreen(
             .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // ── Page header ─────────────────────────────────────────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
@@ -167,14 +157,11 @@ fun FocusScreen(
             )
         }
 
-        // ── Supervision toggle ───────────────────────────────────────────────
         SupervisionCard(
             supervisionEnabled = uiState.supervisionEnabled,
             accessibilityGranted = uiState.accessibilityGranted,
             onToggle = { wantEnabled ->
                 if (wantEnabled) {
-                    // 关键路径：通过 MediaProjectionManager 弹出系统级"是否允许录屏"对话框。
-                    // 真正的 startForegroundService 发生在 onResult 回调里。
                     screenCaptureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
                 } else {
                     VisualSupervisionService.stop(context)
@@ -183,35 +170,18 @@ fun FocusScreen(
             }
         )
 
-        // ── System permissions section ───────────────────────────────────────
-        SystemPermissionsCard(
+        AccessibilityCard(
             accessibilityGranted = uiState.accessibilityGranted,
-            onOpenAccessibility = { AccessibilityUtils.openAccessibilitySettings(context) },
-            onOpenAutoStart = { AccessibilityUtils.openAutoStartSettings(context) },
-            onOpenBattery = { AccessibilityUtils.openBatterySettings(context) }
+            onOpenAccessibility = { AccessibilityUtils.openAccessibilitySettings(context) }
         )
 
-        // ── Supervision rules ────────────────────────────────────────────────
         RulesCard(
             focusGoal = uiState.focusGoalDraft,
             forbiddenTags = uiState.forbiddenTagsDraft,
             dirty = uiState.rulesDirty,
             onFocusGoalChange = viewModel::updateFocusGoalDraft,
             onForbiddenTagsChange = viewModel::updateForbiddenTagsDraft,
-            onSave = { viewModel.saveRules(savedLabel) },
-            onManageApps = onNavigateAppManager
-        )
-
-        // ── Pomodoro timer ───────────────────────────────────────────────────
-        PomodoroCard(
-            displayTime = uiState.displayTime,
-            mode = uiState.pomodoroMode,
-            running = uiState.pomodoroRunning,
-            onToggleRun = {
-                if (uiState.pomodoroRunning) viewModel.pausePomodoro() else viewModel.startPomodoro()
-            },
-            onReset = viewModel::resetPomodoro,
-            onToggleMode = viewModel::togglePomodoroMode
+            onSave = { viewModel.saveRules(savedLabel) }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -292,72 +262,54 @@ private fun SupervisionCard(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// System permissions card
+// Accessibility-only permission card
 // ────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SystemPermissionsCard(
+private fun AccessibilityCard(
     accessibilityGranted: Boolean,
-    onOpenAccessibility: () -> Unit,
-    onOpenAutoStart: () -> Unit,
-    onOpenBattery: () -> Unit
+    onOpenAccessibility: () -> Unit
 ) {
-    SectionCard(
-        icon = Icons.Outlined.AutoAwesome,
-        title = stringResource(R.string.perm_section_title)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        PermissionRow(
-            icon = Icons.Outlined.Accessibility,
-            iconTint = Indigo500,
-            iconBg = IndigoLight,
-            title = stringResource(R.string.open_accessibility_settings),
-            subtitle = if (accessibilityGranted) {
-                stringResource(R.string.accessibility_granted)
-            } else {
-                stringResource(R.string.accessibility_not_granted)
-            },
-            granted = accessibilityGranted,
-            onClick = onOpenAccessibility
-        )
-
-        Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
-
-        PermissionRow(
-            icon = Icons.Outlined.PowerSettingsNew,
-            iconTint = Color(0xFF7B57BA),
-            iconBg = Color(0xFFEFE5FF),
-            title = stringResource(R.string.perm_autostart_title),
-            subtitle = stringResource(R.string.perm_autostart_subtitle),
-            granted = null,
-            onClick = onOpenAutoStart
-        )
-
-        Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
-
-        PermissionRow(
-            icon = Icons.Outlined.BatteryChargingFull,
-            iconTint = Teal600,
-            iconBg = Color(0xFFB3F0F5),
-            title = stringResource(R.string.perm_battery_title),
-            subtitle = stringResource(R.string.perm_battery_subtitle),
-            granted = null,
-            onClick = onOpenBattery
-        )
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.AutoAwesome,
+                    contentDescription = null,
+                    tint = Indigo500,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.perm_section_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            PermissionRow(
+                icon = Icons.Outlined.Accessibility,
+                iconTint = Indigo500,
+                iconBg = IndigoLight,
+                title = stringResource(R.string.open_accessibility_settings),
+                subtitle = if (accessibilityGranted) {
+                    stringResource(R.string.accessibility_granted)
+                } else {
+                    stringResource(R.string.accessibility_not_granted)
+                },
+                granted = accessibilityGranted,
+                onClick = onOpenAccessibility
+            )
+        }
     }
 }
 
-
-/**
- * A single permission row with leading coloured icon, title/subtitle, and a
- * trailing status badge (granted / not granted) or a chevron for rows that
- * have no binary granted state.
- */
-/**
- * A single permission row.
- * - granted = true  → green check icon, row tappable to re-open settings
- * - granted = false → orange warning + "Grant" text button
- * - granted = null  → chevron, entire row tappable (used for auto-start / battery)
- */
 @Composable
 private fun PermissionRow(
     icon: ImageVector,
@@ -365,10 +317,10 @@ private fun PermissionRow(
     iconBg: Color,
     title: String,
     subtitle: String,
-    granted: Boolean?,
+    granted: Boolean,
     onClick: () -> Unit
 ) {
-    val rowModifier = if (granted != false) {
+    val rowModifier = if (granted) {
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -411,9 +363,15 @@ private fun PermissionRow(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        when (granted) {
-            true -> Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Teal600, modifier = Modifier.size(20.dp))
-            false -> TextButton(
+        if (granted) {
+            Icon(
+                Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = Teal600,
+                modifier = Modifier.size(20.dp)
+            )
+        } else {
+            TextButton(
                 onClick = onClick,
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
             ) {
@@ -421,36 +379,6 @@ private fun PermissionRow(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.open_accessibility_settings), style = MaterialTheme.typography.labelSmall)
             }
-            null -> Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Ink200, modifier = Modifier.size(22.dp))
-        }
-    }
-}
-
-@Composable
-private fun SectionCard(
-    icon: ImageVector,
-    title: String,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = icon, contentDescription = null, tint = Indigo500, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            content()
         }
     }
 }
@@ -466,8 +394,7 @@ private fun RulesCard(
     dirty: Boolean,
     onFocusGoalChange: (String) -> Unit,
     onForbiddenTagsChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onManageApps: () -> Unit
+    onSave: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -477,7 +404,12 @@ private fun RulesCard(
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Outlined.Tune, contentDescription = null, tint = Indigo500, modifier = Modifier.size(18.dp))
+                Icon(
+                    imageVector = Icons.Outlined.Tune,
+                    contentDescription = null,
+                    tint = Indigo500,
+                    modifier = Modifier.size(18.dp)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.rules_title),
@@ -531,131 +463,18 @@ private fun RulesCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            AnimatedVisibility(
+                visible = dirty,
+                enter = fadeIn(tween(200)) + expandVertically(),
+                exit = fadeOut(tween(200)) + shrinkVertically()
             ) {
-                AnimatedVisibility(
-                    visible = dirty,
-                    modifier = Modifier.weight(1f),
-                    enter = fadeIn(tween(200)) + expandVertically(),
-                    exit = fadeOut(tween(200)) + shrinkVertically()
-                ) {
-                    Button(
-                        onClick = onSave,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Indigo500),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.rules_save), color = Color.White)
-                    }
-                }
-                OutlinedButton(
-                    onClick = onManageApps,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = if (dirty) Modifier.weight(1f) else Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Indigo500)
-                ) {
-                    Icon(Icons.Outlined.Apps, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.rules_manage_apps))
-                }
-            }
-        }
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Pomodoro card
-// ────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun PomodoroCard(
-    displayTime: String,
-    mode: PomodoroMode,
-    running: Boolean,
-    onToggleRun: () -> Unit,
-    onReset: () -> Unit,
-    onToggleMode: () -> Unit
-) {
-    val timerColor by animateColorAsState(
-        targetValue = if (running) Indigo500 else MaterialTheme.colorScheme.onSurface,
-        animationSpec = tween(400),
-        label = "timerColor"
-    )
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Outlined.Timer, contentDescription = null, tint = Indigo500, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.pomodoro_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = displayTime,
-                fontSize = 52.sp,
-                fontWeight = FontWeight.Bold,
-                color = timerColor,
-                letterSpacing = 2.sp
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = if (mode == PomodoroMode.COUNTDOWN) stringResource(R.string.pomodoro_mode_countdown)
-                else stringResource(R.string.pomodoro_mode_countup),
-                style = MaterialTheme.typography.bodySmall,
-                color = Ink500
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = onToggleRun,
+                    onClick = onSave,
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (running) Color(0xFFFF6B6B) else Indigo500
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = Indigo500),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = if (running) stringResource(R.string.pomodoro_pause) else stringResource(R.string.pomodoro_start),
-                        color = Color.White
-                    )
-                }
-                OutlinedButton(
-                    onClick = onReset,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Indigo500)
-                ) {
-                    Text(stringResource(R.string.pomodoro_reset))
-                }
-                OutlinedButton(
-                    onClick = onToggleMode,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
-                ) {
-                    Text(
-                        text = if (mode == PomodoroMode.COUNTDOWN) stringResource(R.string.pomodoro_mode_countup)
-                        else stringResource(R.string.pomodoro_mode_countdown)
-                    )
+                    Text(stringResource(R.string.rules_save), color = Color.White)
                 }
             }
         }

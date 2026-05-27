@@ -1,12 +1,15 @@
 package com.focusai.app.data
 
 import com.focusai.app.data.db.AppDatabase
-import com.focusai.app.data.db.FocusSessionEntity
 import com.focusai.app.data.db.InterceptionEntity
 import com.focusai.app.data.db.StatsDao
 import kotlinx.coroutines.flow.Flow
 import java.util.Calendar
 
+/**
+ * 视觉监督版的统计仓库：只关心"今日被打断了多少次 + 最近打断记录"。
+ * 旧版的番茄钟专注时长统计已废弃。
+ */
 class StatsRepository(private val statsDao: StatsDao) {
 
     private fun todayRange(): Pair<Long, Long> {
@@ -27,50 +30,31 @@ class StatsRepository(private val statsDao: StatsDao) {
         return statsDao.observeInterceptionCount(start, end)
     }
 
-    fun observeTodayFocusSeconds(): Flow<Long> {
-        val (start, end) = todayRange()
-        return statsDao.observeFocusSeconds(start, end)
-    }
-
     fun observeRecentInterceptions(): Flow<List<InterceptionEntity>> {
         val (start, end) = todayRange()
         return statsDao.observeRecentInterceptions(start, end)
     }
 
+    /**
+     * 记录一次拦截，并返回"今天已拦截多少次"用于通知文案。
+     * 顺便清理 30 天前的旧记录，避免数据库无限增长。
+     */
     suspend fun recordInterception(
-        packageName: String = "",
-        appLabel: String = "",
         reasonType: String = "",
         reasonDetail: String = "",
-        screenTextExcerpt: String = "",
         aiReply: String = ""
     ): Int {
         statsDao.insertInterception(
             InterceptionEntity(
-                packageName = packageName,
-                appLabel = appLabel,
                 reasonType = reasonType,
                 reasonDetail = reasonDetail,
-                screenTextExcerpt = screenTextExcerpt,
                 aiReply = aiReply
             )
         )
-        // Remove records older than 30 days so the database stays lean without
-        // ever truncating today's count (the previous LIMIT 10 caused count to
-        // freeze at ≤10 after 10 interceptions across the whole table lifetime).
         val thirtyDaysAgo = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
         statsDao.deleteOlderThan(thirtyDaysAgo)
         val (start, end) = todayRange()
         return statsDao.getInterceptionCount(start, end)
-    }
-
-    suspend fun getInterceptionById(id: Long): InterceptionEntity? {
-        return statsDao.getInterceptionById(id)
-    }
-
-    suspend fun recordFocusSession(durationSeconds: Long) {
-        if (durationSeconds <= 0) return
-        statsDao.insertFocusSession(FocusSessionEntity(durationSeconds = durationSeconds))
     }
 
     companion object {

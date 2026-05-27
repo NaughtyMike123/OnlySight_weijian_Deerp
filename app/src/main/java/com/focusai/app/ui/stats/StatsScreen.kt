@@ -3,7 +3,6 @@ package com.focusai.app.ui.stats
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +34,10 @@ import com.focusai.app.data.db.InterceptionEntity
 import com.focusai.app.util.TimeFormatter
 import com.focusai.app.viewmodel.StatsViewModel
 
+/**
+ * 统计页：今日被打断次数 + 最近 10 条打断记录。
+ * 视觉版没有专注时长统计，旧番茄钟相关卡片已删除。
+ */
 @Composable
 fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
@@ -53,21 +56,11 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Row(
+        StatCard(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatCard(
-                modifier = Modifier.weight(1f),
-                label = stringResource(R.string.stats_interceptions),
-                value = uiState.interceptionCount.toString()
-            )
-            StatCard(
-                modifier = Modifier.weight(1f),
-                label = stringResource(R.string.stats_focus_time),
-                value = stringResource(R.string.stats_focus_minutes, uiState.focusMinutes)
-            )
-        }
+            label = stringResource(R.string.stats_interceptions),
+            value = uiState.interceptionCount.toString()
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -93,19 +86,12 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(text = TimeFormatter.formatTimestamp(item.timestamp))
-                            Spacer(modifier = Modifier.height(4.dp))
-                            val appLine = if (item.appLabel.isBlank()) item.packageName else item.appLabel
-                            Text(
-                                text = appLine.ifBlank { stringResource(R.string.stats_unknown_app) },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (item.reasonType.isNotBlank()) {
+                            if (item.reasonDetail.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = item.reasonType,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
+                                    text = item.reasonDetail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -122,19 +108,10 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     DetailLine(stringResource(R.string.stats_record_time), TimeFormatter.formatTimestamp(record.timestamp))
-                    DetailLine(
-                        stringResource(R.string.stats_record_app),
-                        if (record.appLabel.isNotBlank()) "${record.appLabel} (${record.packageName})" else record.packageName
-                    )
-                    DetailLine(stringResource(R.string.stats_record_reason_type), record.reasonType.ifBlank { "-" })
                     DetailLine(stringResource(R.string.stats_record_reason_detail), record.reasonDetail.ifBlank { "-" })
                     DetailLine(
                         stringResource(R.string.stats_record_ai_reply),
-                        record.aiReply.ifBlank { stringResource(R.string.stats_record_ai_reply_empty) }
-                    )
-                    DetailLine(
-                        stringResource(R.string.stats_record_excerpt),
-                        record.screenTextExcerpt.ifBlank { "-" }
+                        record.aiReply.ifBlank { "-" }
                     )
                 }
             },
@@ -165,14 +142,14 @@ private fun StatCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(text = label, style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = value,
-                fontSize = 28.sp,
+                fontSize = 36.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )

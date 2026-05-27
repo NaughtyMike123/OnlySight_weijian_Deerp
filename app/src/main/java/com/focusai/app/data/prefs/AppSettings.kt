@@ -24,9 +24,19 @@ data class AppSettings(
     val customPromptTemplate: String = DEFAULT_PROMPT_TEMPLATE
 )
 
-// 视觉版默认指向豆包（火山方舟）OpenAI 兼容端点。
-// 用户依然可以在「设置」里改成其它兼容 VLM（例如 OpenAI / Qwen-VL）。
-const val DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+// 视觉版默认指向火山方舟（豆包）OpenAI 兼容端点。
+// 注意末尾的 `/`，Retrofit 拼接相对路径 `chat/completions` 时必须保留。
+const val DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3/"
+
+/**
+ * 默认模型名。
+ *
+ * 火山方舟支持两种填法（任选其一，二者等价）：
+ *  1. 公共模型名，例如 `doubao-1-5-vision-pro-32k-250115`
+ *  2. 用户在控制台创建的"推理接入点 ID"，形如 `ep-20250115xxxxxx-xxxxx`
+ *
+ * 用户可在「设置 → Model Name」里自由切换。
+ */
 const val DEFAULT_MODEL = "doubao-1-5-vision-pro-32k-250115"
 const val GITHUB_ISSUES_URL = "https://github.com/NaughtyMike123/OnlySight_weijian_Deerp/issues"
 
@@ -41,17 +51,26 @@ const val DEFAULT_FOCUS_GOAL = "学习与工作（编程、阅读、文档、笔
  */
 const val DEFAULT_FORBIDDEN_TAGS = "鬼畜, 美女, 搞笑段子, 游戏直播, 明星八卦, 颜值, 整活, 沙雕, 吐槽"
 
-const val DEFAULT_PROMPT_TEMPLATE = """
-你是一个极其严格的防沉迷监督员。
-用户当前的专注目标是：{focusGoal}
-用户明确不想看的内容类型（出现即视为娱乐）：{forbiddenTags}
+/**
+ * 视觉版默认提示词。
+ *
+ * 关键设计：
+ * - 直接面向"截屏图像"判定，不依赖任何文本前置标签（旧版的 `[当前场景: ...]` 已废除）。
+ * - 强制只输出一个数字字符 `0` / `1`，方便后台稳定解析。
+ * - 支持两个占位符 `{focusGoal}` 与 `{forbiddenTags}`，由 [com.focusai.app.util.PromptTemplateRenderer] 在
+ *   发送给模型前替换为用户配置的真实文本。
+ *
+ * 用户可在"设置 → 高级提示词设置"里关闭/编辑模板。
+ */
+const val DEFAULT_PROMPT_TEMPLATE = """你是一个极其严格的防沉迷监督员，正在分析用户手机屏幕的实时截图。
+
+用户当前的专注目标：{focusGoal}
+用户明确不想看到的内容类型（出现即视为娱乐）：{forbiddenTags}
 
 判定规则（请严格遵守）：
-1. 屏幕文本第一行若是 [当前场景: 浏览/搜索/推荐列表]，说明用户在找内容；仅当明确禁止标签或明显娱乐信号出现时回复 1，其余回复 0。
-2. 屏幕文本第一行若是 [当前场景: 视频播放中]，请优先依据【视频主标题】和【可见标签】判断：
-   - 与专注目标相关的技术、学习、工作内容 → 0
-   - 娱乐 / 搞笑 / 无意义视频消磨时间 / 命中禁止标签 → 1
-3. 只要禁止标签词出现，即使在浏览场景也应从严判断。
+1. 截图显示短视频信息流、娱乐直播、游戏画面、鬼畜/搞笑/八卦/颜值类内容 → 回复 1
+2. 截图明显与专注目标相关（学习、编程、阅读、文档、IDE、笔记、邮件、工具、桌面、设置等）→ 回复 0
+3. 截图中只要出现禁止标签词，即使是浏览/搜索场景也从严判断为 1
+4. 中性场景（桌面、系统设置、消息聊天列表）→ 回复 0
 
-输出格式：只回复一个数字字符 '0' 或 '1'，不要输出任何其他内容。
-"""
+输出格式：只回复一个数字字符 '0' 或 '1'，不要输出任何其他内容、标点或解释。"""

@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [InterceptionEntity::class, FocusSessionEntity::class],
-    version = 2,
+    entities = [InterceptionEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,7 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "focusai.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { instance = it }
             }
         }
@@ -39,6 +39,13 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE interceptions ADD COLUMN reasonDetail TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE interceptions ADD COLUMN screenTextExcerpt TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE interceptions ADD COLUMN aiReply TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** v3：删除番茄钟统计表，视觉监督版本不再需要专注时长统计。 */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS focus_sessions")
             }
         }
     }

@@ -27,10 +27,6 @@ import androidx.core.app.NotificationCompat
 import com.focusai.app.FocusAiApplication
 import com.focusai.app.MainActivity
 import com.focusai.app.R
-import com.focusai.app.data.api.ChatCompletionRequest
-import com.focusai.app.data.api.ChatMessage
-import com.focusai.app.data.api.ContentPart
-import com.focusai.app.data.prefs.DEFAULT_MODEL
 import com.focusai.app.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -202,30 +198,32 @@ class VisualSupervisionService : Service() {
     /**
      * 一次完整的"抓帧 → 压缩 → 调用 VLM → 决策"。
      * 任意一步失败都不会拖死后续循环。
+     *
+     * VLM 调用、模板渲染、JSON 拼装统统委托给 [com.focusai.app.data.api.VisionRepository]；
+     * 本服务只关心"屏幕截图 → 是否需要踢桌面"这层抽象。
      */
     private suspend fun tickOnce() {
         val base64 = captureFrameAsBase64() ?: return
-        val verdict = runCatching {
-            withTimeout(REQUEST_TIMEOUT_MS) { callVisionModel(base64) }
-        }.getOrElse { e ->
-            Log.w(TAG, "VLM 调用失败：${e.javaClass.simpleName} - ${e.message}")
-            null
-        } ?: return
+        val app = application as FocusAiApplication
 
-        Log.d(TAG, "VLM 原始返回：$verdict")
-        if (isDistracted(verdict)) {
+        val distracted = runCatching {
+            withTimeout(REQUEST_TIMEOUT_MS) {
+                app.visionRepository.judgeBase64Image(base64)
+            }
+        }.getOrElse { e ->
+            Log.w(TAG, "VLM 调用整体异常：${e.javaClass.simpleName} - ${e.message}")
+            false
+        }
+
+        if (distracted) {
             Log.d(TAG, "判定为娱乐，触发回桌面。")
             // 必须先在主线程触发 HOME，再异步落库 + 推通知，避免被打断的 App 抢到分析窗口。
             withContext(Dispatchers.Main) { FocusAccessibilityService.requestHome() }
             val todayCount = runCatching {
-                val app = application as FocusAiApplication
                 app.statsRepository.recordInterception(
-                    packageName = "",
-                    appLabel = "",
                     reasonType = "VLM_DISTRACTED",
                     reasonDetail = "视觉模型判定为娱乐内容",
-                    screenTextExcerpt = "",
-                    aiReply = verdict
+                    aiReply = "1"
                 )
             }.getOrDefault(0)
             withContext(Dispatchers.Main) {
@@ -302,45 +300,6 @@ class VisualSupervisionService : Service() {
         screenWidth = metrics.widthPixels
         screenHeight = metrics.heightPixels
         screenDensity = metrics.densityDpi
-    }
-
-    // ────────────────────────────── VLM 调用 ──────────────────────────────
-
-    private suspend fun callVisionModel(base64Image: String): String? {
-        val app = application as FocusAiApplication
-        val settings = app.settingsRepository.getSettingsSnapshot()
-        if (settings.apiKey.isBlank()) {
-            Log.w(TAG, "未配置 API Key，跳过 VLM 调用。")
-            return null
-        }
-
-        val api = app.apiClientFactory.createApi()
-        val dataUrl = "data:image/jpeg;base64,$base64Image"
-
-        // 用户严格指定的判定提示词：模型只允许输出 '0' 或 '1'。
-        val request = ChatCompletionRequest(
-            model = settings.model.ifBlank { DEFAULT_MODEL },
-            messages = listOf(
-                ChatMessage.multimodal(
-                    role = "user",
-                    parts = listOf(
-                        ContentPart.text(VISION_PROMPT),
-                        ContentPart.image(dataUrl)
-                    )
-                )
-            ),
-            temperature = 0.0,
-            maxTokens = 4
-        )
-
-        return api.chatCompletions(request).choices?.firstOrNull()?.message?.content?.trim()
-    }
-
-    private fun isDistracted(reply: String): Boolean {
-        if (reply.isBlank()) return false
-        // 取第一个数字字符，避免模型偶尔输出 "1。" / "1." 这种带标点的情况。
-        val firstDigit = reply.firstOrNull { it.isDigit() } ?: return false
-        return firstDigit == '1'
     }
 
     // ────────────────────────────── 前台通知 ──────────────────────────────
@@ -443,14 +402,6 @@ class VisualSupervisionService : Service() {
 
         /** JPEG 编码质量。512px 边长下 60~75 已足够 VLM 识别。 */
         private const val JPEG_QUALITY = 70
-
-        /**
-         * 任务书指定的判定提示词，模型必须只回 '0' 或 '1'。
-         */
-        private const val VISION_PROMPT =
-            "这是一张用户手机屏幕的截图。如果屏幕画面显示的是短视频、游戏或娱乐直播，" +
-                "请只回复一个数字 '1'。如果显示的是学习、工具、桌面或正常聊天，" +
-                "请只回复一个数字 '0'。不要输出任何其它字符。"
 
         /**
          * 当前服务是否在运行。UI 层可用作开关状态显示。

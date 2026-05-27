@@ -6,27 +6,21 @@ import androidx.lifecycle.viewModelScope
 import com.focusai.app.FocusAiApplication
 import com.focusai.app.service.VisualSupervisionService
 import com.focusai.app.util.AccessibilityUtils
-import com.focusai.app.util.TimeFormatter
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-enum class PomodoroMode { COUNTDOWN, COUNT_UP }
-
-const val POMODORO_DEFAULT_SECONDS = 1500L // 25 分钟
-
+/**
+ * 首页 ViewModel：负责"监督开关、无障碍权限状态、监督规则草稿"三件事。
+ *
+ * 注意：真正的"启停截屏服务"动作在 UI 层完成，因为申请 MediaProjection 必须有
+ * Activity 上下文 + ActivityResult API。这里只负责持久化开关状态与自愈状态对齐。
+ */
 data class FocusUiState(
     val supervisionEnabled: Boolean = false,
     val accessibilityGranted: Boolean = false,
-    val pomodoroSeconds: Long = POMODORO_DEFAULT_SECONDS,
-    val pomodoroRunning: Boolean = false,
-    val pomodoroMode: PomodoroMode = PomodoroMode.COUNTDOWN,
-    val displayTime: String = TimeFormatter.formatPomodoro(POMODORO_DEFAULT_SECONDS),
     /** 用户在输入框内当前编辑的「专注目标」（未保存）。 */
     val focusGoalDraft: String = "",
     /** 用户在输入框内当前编辑的「禁止标签」（未保存）。 */
@@ -40,13 +34,9 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as FocusAiApplication
     private val settingsRepository = app.settingsRepository
-    private val statsRepository = app.statsRepository
 
     private val _uiState = MutableStateFlow(FocusUiState())
     val uiState: StateFlow<FocusUiState> = _uiState.asStateFlow()
-
-    private var timerJob: Job? = null
-    private var sessionStartSeconds: Long = 0
 
     /** 已存的专注目标，用于和草稿对比是否 dirty。 */
     private var savedFocusGoal: String = ""
@@ -58,9 +48,9 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
                 savedFocusGoal = settings.focusGoal
                 savedForbiddenTags = settings.forbiddenTags
 
-                // 关键自愈逻辑：若设置里残留 supervisionEnabled=true 但视觉前台服务
+                // 关键自愈逻辑：若 prefs 里残留 supervisionEnabled=true 但前台服务
                 // 实际未运行（典型场景：用户上次启用后杀了进程 / 重启过手机），
-                // 我们把"显示开关"置为 false，强制用户重新申请 MediaProjection。
+                // 把开关同步回 false，强制用户重新申请 MediaProjection。
                 val effectiveEnabled = settings.supervisionEnabled && VisualSupervisionService.running
                 if (settings.supervisionEnabled && !VisualSupervisionService.running) {
                     settingsRepository.setSupervisionEnabled(false)
@@ -83,7 +73,6 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshAccessibilityStatus() {
         val granted = AccessibilityUtils.isAccessibilityServiceEnabled(getApplication())
-        // 顺手刷一下"监督开关"状态：截屏服务可能在后台被系统/MediaProjection 回收掉。
         val currentlyRunning = VisualSupervisionService.running
         _uiState.update { current ->
             current.copy(
@@ -92,15 +81,12 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         if (!currentlyRunning) {
-            // 把持久化里可能残留的 true 也清掉，下次冷启动 UI 才能显示一致状态。
             viewModelScope.launch { settingsRepository.setSupervisionEnabled(false) }
         }
     }
 
     /**
-     * 仅落盘开关状态。
-     * 真正的"启停截屏服务"动作发生在 UI 层（FocusScreen），因为申请 MediaProjection
-     * 权限需要 Activity 上下文与 ActivityResult API。
+     * 仅落盘开关状态。真正启停服务由 UI 层完成。
      */
     fun persistSupervisionEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -110,13 +96,19 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateFocusGoalDraft(value: String) {
         _uiState.update {
-            it.copy(focusGoalDraft = value, rulesDirty = value != savedFocusGoal || it.forbiddenTagsDraft != savedForbiddenTags)
+            it.copy(
+                focusGoalDraft = value,
+                rulesDirty = value != savedFocusGoal || it.forbiddenTagsDraft != savedForbiddenTags
+            )
         }
     }
 
     fun updateForbiddenTagsDraft(value: String) {
         _uiState.update {
-            it.copy(forbiddenTagsDraft = value, rulesDirty = value != savedForbiddenTags || it.focusGoalDraft != savedFocusGoal)
+            it.copy(
+                forbiddenTagsDraft = value,
+                rulesDirty = value != savedForbiddenTags || it.focusGoalDraft != savedFocusGoal
+            )
         }
     }
 
@@ -131,94 +123,5 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearRulesSavedMessage() {
         _uiState.update { it.copy(rulesSavedMessage = null) }
-    }
-
-    fun togglePomodoroMode() {
-        resetPomodoro()
-        _uiState.update {
-            val newMode = if (it.pomodoroMode == PomodoroMode.COUNTDOWN) {
-                PomodoroMode.COUNT_UP
-            } else {
-                PomodoroMode.COUNTDOWN
-            }
-            val seconds = if (newMode == PomodoroMode.COUNTDOWN) POMODORO_DEFAULT_SECONDS else 0L
-            it.copy(
-                pomodoroMode = newMode,
-                pomodoroSeconds = seconds,
-                displayTime = TimeFormatter.formatPomodoro(seconds)
-            )
-        }
-    }
-
-    fun startPomodoro() {
-        if (_uiState.value.pomodoroRunning) return
-        sessionStartSeconds = _uiState.value.pomodoroSeconds
-        _uiState.update { it.copy(pomodoroRunning = true) }
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            while (isActive && _uiState.value.pomodoroRunning) {
-                delay(1000)
-                _uiState.update { state ->
-                    val next = when (state.pomodoroMode) {
-                        PomodoroMode.COUNTDOWN -> (state.pomodoroSeconds - 1).coerceAtLeast(0)
-                        PomodoroMode.COUNT_UP -> state.pomodoroSeconds + 1
-                    }
-                    val stillRunning = !(state.pomodoroMode == PomodoroMode.COUNTDOWN && next == 0L)
-                    state.copy(
-                        pomodoroSeconds = next,
-                        displayTime = TimeFormatter.formatPomodoro(next),
-                        pomodoroRunning = stillRunning
-                    )
-                }
-                if (!_uiState.value.pomodoroRunning) {
-                    onPomodoroFinished()
-                }
-            }
-        }
-    }
-
-    fun pausePomodoro() {
-        _uiState.update { it.copy(pomodoroRunning = false) }
-        timerJob?.cancel()
-        viewModelScope.launch {
-            if (_uiState.value.pomodoroMode == PomodoroMode.COUNT_UP && _uiState.value.pomodoroSeconds > 0) {
-                statsRepository.recordFocusSession(_uiState.value.pomodoroSeconds)
-            }
-        }
-    }
-
-    fun resetPomodoro() {
-        timerJob?.cancel()
-        val seconds = if (_uiState.value.pomodoroMode == PomodoroMode.COUNTDOWN) {
-            POMODORO_DEFAULT_SECONDS
-        } else {
-            0L
-        }
-        _uiState.update {
-            it.copy(
-                pomodoroRunning = false,
-                pomodoroSeconds = seconds,
-                displayTime = TimeFormatter.formatPomodoro(seconds)
-            )
-        }
-    }
-
-    private fun onPomodoroFinished() {
-        viewModelScope.launch {
-            val elapsed = when (_uiState.value.pomodoroMode) {
-                PomodoroMode.COUNTDOWN -> POMODORO_DEFAULT_SECONDS
-                PomodoroMode.COUNT_UP -> _uiState.value.pomodoroSeconds
-            }
-            statsRepository.recordFocusSession(elapsed)
-        }
-    }
-
-    override fun onCleared() {
-        timerJob?.cancel()
-        super.onCleared()
-    }
-
-    companion object {
-        const val POMODORO_DEFAULT_SECONDS = 25 * 60L
     }
 }
