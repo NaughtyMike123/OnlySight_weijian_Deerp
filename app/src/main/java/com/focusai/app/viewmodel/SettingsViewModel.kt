@@ -149,7 +149,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     val reply = api.chatCompletions(
                         ChatCompletionRequest(
                             model = state.model.ifBlank { DEFAULT_MODEL },
-                            messages = listOf(ChatMessage(role = "user", content = "ping")),
+                            messages = listOf(ChatMessage.text(role = "user", text = "ping")),
                             maxTokens = 8
                         )
                     ).choices?.firstOrNull()?.message?.content?.trim().orEmpty()

@@ -70,19 +70,6 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun resolveLanguage(): AppLanguage {
-        val settings = getSettingsSnapshot()
-        return settings.language
-    }
-
-    fun getSystemPromptZh(): String {
-        return context.getString(com.focusai.app.R.string.system_prompt_zh)
-    }
-
-    fun getSystemPromptEn(): String {
-        return context.getString(com.focusai.app.R.string.system_prompt_en)
-    }
-
     companion object {
         private val KEY_BASE_URL = stringPreferencesKey("base_url")
         private val KEY_API_KEY = stringPreferencesKey("api_key")

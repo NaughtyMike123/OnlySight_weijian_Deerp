@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OnlySight</string>
-    <string name="accessibility_service_description">Reads on-screen text for AI productivity monitoring. Works only when supervision is enabled; text is sent to your configured API for analysis.</string>
+    <string name="accessibility_service_description">Lets OnlySight return you to the home screen when the visual model detects entertainment. This service does NOT read on-screen text.</string>
 
     <!-- Tab -->
     <string name="tab_focus">Focus</string>
@@ -16,45 +16,26 @@
     <string name="accessibility_granted">Accessibility granted</string>
     <string name="accessibility_not_granted">Accessibility not granted</string>
     <string name="open_accessibility_settings">Grant accessibility</string>
-    <string name="perm_autostart_title">Auto-start</string>
-    <string name="perm_autostart_subtitle">Allow the app to start after reboot so supervision stays active</string>
-    <string name="perm_autostart_action">Open settings</string>
-    <string name="perm_battery_title">Background power</string>
-    <string name="perm_battery_subtitle">Add OnlySight to the battery whitelist to prevent background kills</string>
-    <string name="perm_battery_action">Open settings</string>
-    <string name="perm_section_title">Permissions &amp; System</string>
-    <string name="pomodoro_title">Pomodoro</string>
-    <string name="pomodoro_start">Start</string>
-    <string name="pomodoro_pause">Pause</string>
-    <string name="pomodoro_reset">Reset</string>
-    <string name="pomodoro_mode_countdown">Countdown</string>
-    <string name="pomodoro_mode_countup">Count up</string>
+    <string name="perm_section_title">System Permission</string>
 
     <!-- Stats -->
     <string name="stats_title">Today\'s Stats</string>
     <string name="stats_interceptions">Interruptions</string>
-    <string name="stats_focus_time">Focus time</string>
-    <string name="stats_focus_minutes">%1$d min</string>
     <string name="stats_empty">No data yet</string>
     <string name="stats_recent_interceptions">Recent interruptions</string>
-    <string name="stats_unknown_app">Unknown app</string>
     <string name="stats_record_detail_title">Interception detail</string>
     <string name="stats_record_time">Time: </string>
-    <string name="stats_record_app">App: </string>
-    <string name="stats_record_reason_type">Reason type: </string>
-    <string name="stats_record_reason_detail">Reason detail: </string>
+    <string name="stats_record_reason_detail">Reason: </string>
     <string name="stats_record_ai_reply">AI reply: </string>
-    <string name="stats_record_ai_reply_empty">None (blacklist interception)</string>
-    <string name="stats_record_excerpt">Screen text excerpt: </string>
 
     <!-- Settings -->
     <string name="settings_title">API Settings</string>
     <string name="settings_base_url">Base URL</string>
-    <string name="settings_base_url_hint">https://api.deepseek.com/v1</string>
+    <string name="settings_base_url_hint">https://ark.cn-beijing.volces.com/api/v3</string>
     <string name="settings_api_key">API Key</string>
     <string name="settings_api_key_hint">sk-...</string>
     <string name="settings_model">Model Name</string>
-    <string name="settings_model_hint">deepseek-chat</string>
+    <string name="settings_model_hint">doubao-1-5-vision-pro-32k-250115</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Settings saved</string>
     <string name="settings_test_connection">Test connection</string>
@@ -81,11 +62,13 @@
     <string name="donate_close">Close</string>
 
     <!-- Service -->
-    <string name="intercept_toast">Entertainment detected — returned to home</string>
     <string name="intercept_notification_title">OnlySight interruption</string>
     <string name="intercept_notification_body">Entertainment detected. Returned to home. #%1$d today.</string>
-    <string name="system_prompt_zh">你是一个严格的自律监督员。请分析屏幕文本，判断用户是在「学习工作」还是在「看娱乐视频消磨时间」。娱乐回复1，正常使用回复0，仅回复数字。</string>
-    <string name="system_prompt_en">You are a strict productivity monitor. Analyze the screen text and determine if the user is studying/working or watching entertainment videos. Reply with \'1\' for entertainment, \'0\' for productive use. Only reply with the number.</string>
+    <string name="visual_supervision_notification_title">OnlySight visual supervision</string>
+    <string name="visual_supervision_notification_body">Capturing one frame every 4s for the vision model.</string>
+    <string name="visual_supervision_channel_name">Visual supervision</string>
+    <string name="visual_supervision_channel_description">Foreground service status, cannot be disabled while running.</string>
+    <string name="visual_supervision_permission_denied">Screen-capture permission denied; supervision did not start.</string>
 
     <!-- Rules card (home) -->
     <string name="rules_title">Supervision Rules</string>
@@ -97,16 +80,4 @@
     <string name="rules_forbidden_tags_help">Comma-separated. Any of these tags on screen will trigger immediate block.</string>
     <string name="rules_save">Save rules</string>
     <string name="rules_saved">Rules saved, effective immediately</string>
-    <string name="rules_manage_apps">Manage Apps</string>
-
-    <!-- App manager -->
-    <string name="app_manager_title">App Lists</string>
-    <string name="app_manager_subtitle">Sort your apps into Black / Grey / White / Unmanaged.\n• Black: send to home immediately\n• Grey: ask the AI\n• White: ignored\n• Unmanaged: use defaults + smart heuristics</string>
-    <string name="app_manager_search_hint">Search app name or package</string>
-    <string name="app_manager_empty">No matching apps</string>
-    <string name="cat_blacklist">Black</string>
-    <string name="cat_greylist">Grey</string>
-    <string name="cat_whitelist">White</string>
-    <string name="cat_unmanaged">Unmanaged</string>
-    <string name="back">Back</string>
 </resources>

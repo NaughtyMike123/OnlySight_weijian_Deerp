@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">唯见</string>
-    <string name="accessibility_service_description">读取屏幕文字以进行 AI 自律监督。仅在您开启监督时工作，文本会发送至您配置的 API 进行分析。</string>
+    <string name="accessibility_service_description">允许唯见在视觉模型判定屏幕内容为娱乐时，把您退回桌面。本服务不读取屏幕文字。</string>
 
     <!-- Tab -->
     <string name="tab_focus">首页</string>
@@ -16,45 +16,26 @@
     <string name="accessibility_granted">无障碍权限已授权</string>
     <string name="accessibility_not_granted">无障碍权限未授权</string>
     <string name="open_accessibility_settings">去授权无障碍</string>
-    <string name="perm_autostart_title">自启动</string>
-    <string name="perm_autostart_subtitle">允许应用在手机重启后自动运行，保持监督持续有效</string>
-    <string name="perm_autostart_action">去设置</string>
-    <string name="perm_battery_title">后台耗电管理</string>
-    <string name="perm_battery_subtitle">将本应用加入电池白名单，防止系统后台杀进程</string>
-    <string name="perm_battery_action">去设置</string>
-    <string name="perm_section_title">权限与系统设置</string>
-    <string name="pomodoro_title">番茄钟</string>
-    <string name="pomodoro_start">开始</string>
-    <string name="pomodoro_pause">暂停</string>
-    <string name="pomodoro_reset">重置</string>
-    <string name="pomodoro_mode_countdown">倒计时</string>
-    <string name="pomodoro_mode_countup">正计时</string>
+    <string name="perm_section_title">系统权限</string>
 
     <!-- Stats -->
     <string name="stats_title">今日统计</string>
     <string name="stats_interceptions">被打断次数</string>
-    <string name="stats_focus_time">专注总时长</string>
-    <string name="stats_focus_minutes">%1$d 分钟</string>
     <string name="stats_empty">暂无数据</string>
     <string name="stats_recent_interceptions">最近打断记录</string>
-    <string name="stats_unknown_app">未知应用</string>
     <string name="stats_record_detail_title">打断详情</string>
     <string name="stats_record_time">时间： </string>
-    <string name="stats_record_app">应用： </string>
-    <string name="stats_record_reason_type">原因类型： </string>
-    <string name="stats_record_reason_detail">原因说明： </string>
+    <string name="stats_record_reason_detail">原因： </string>
     <string name="stats_record_ai_reply">AI 回复： </string>
-    <string name="stats_record_ai_reply_empty">无（黑名单拦截）</string>
-    <string name="stats_record_excerpt">屏幕文本片段： </string>
 
     <!-- Settings -->
     <string name="settings_title">API 配置</string>
     <string name="settings_base_url">Base URL</string>
-    <string name="settings_base_url_hint">https://api.deepseek.com/v1</string>
+    <string name="settings_base_url_hint">https://ark.cn-beijing.volces.com/api/v3</string>
     <string name="settings_api_key">API Key</string>
     <string name="settings_api_key_hint">sk-...</string>
     <string name="settings_model">Model Name</string>
-    <string name="settings_model_hint">deepseek-chat</string>
+    <string name="settings_model_hint">doubao-1-5-vision-pro-32k-250115</string>
     <string name="settings_save">保存配置</string>
     <string name="settings_saved">配置已保存</string>
     <string name="settings_test_connection">测试连接</string>
@@ -81,11 +62,13 @@
     <string name="donate_close">关闭</string>
 
     <!-- Service -->
-    <string name="intercept_toast">AI 检测到娱乐内容，已退回桌面</string>
     <string name="intercept_notification_title">唯见 打断提醒</string>
     <string name="intercept_notification_body">检测到娱乐内容，已退回桌面。今日第 %1$d 次打断。</string>
-    <string name="system_prompt_zh">你是一个严格的自律监督员。请分析屏幕文本，判断用户是在「学习工作」还是在「看娱乐视频消磨时间」。娱乐回复1，正常使用回复0，仅回复数字。</string>
-    <string name="system_prompt_en">You are a strict productivity monitor. Analyze the screen text and determine if the user is studying/working or watching entertainment videos. Reply with \'1\' for entertainment, \'0\' for productive use. Only reply with the number.</string>
+    <string name="visual_supervision_notification_title">唯见 正在视觉监督</string>
+    <string name="visual_supervision_notification_body">每 4 秒抓取一帧屏幕画面交给视觉模型判定。</string>
+    <string name="visual_supervision_channel_name">视觉监督</string>
+    <string name="visual_supervision_channel_description">前台服务运行状态通知，无法关闭。</string>
+    <string name="visual_supervision_permission_denied">未授予屏幕录制权限，监督未启动。</string>
 
     <!-- 监督规则卡片（首页） -->
     <string name="rules_title">监督规则</string>
@@ -97,16 +80,4 @@
     <string name="rules_forbidden_tags_help">用逗号分隔。一旦屏幕出现这些标签词，立即被踢出。</string>
     <string name="rules_save">保存规则</string>
     <string name="rules_saved">规则已保存，立即生效</string>
-    <string name="rules_manage_apps">管理应用</string>
-
-    <!-- 应用管理页 -->
-    <string name="app_manager_title">应用名单</string>
-    <string name="app_manager_subtitle">把你装的 App 分到「黑/灰/白/不管」四种状态。\n• 黑：直接踢回桌面\n• 灰：交给 AI 判断\n• 白：完全忽略\n• 不管：用内置默认 + 智能识别</string>
-    <string name="app_manager_search_hint">搜索 App 名称或包名</string>
-    <string name="app_manager_empty">没有匹配的应用</string>
-    <string name="cat_blacklist">黑</string>
-    <string name="cat_greylist">灰</string>
-    <string name="cat_whitelist">白</string>
-    <string name="cat_unmanaged">不管</string>
-    <string name="back">返回</string>
 </resources>

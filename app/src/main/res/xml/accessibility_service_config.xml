@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    无障碍服务配置（视觉版）：
+    - 不再扫描 typeWindowContentChanged / typeWindowStateChanged 抓取文本
+    - 仅订阅一个最轻量的事件类型，保证框架愿意绑定服务
+    - canRetrieveWindowContent=false，关闭节点树读取
+    - 服务唯一职责：执行 performGlobalAction(GLOBAL_ACTION_HOME)
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged|typeViewScrolled"
+    android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
-    android:canRetrieveWindowContent="true"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:canPerformGestures="false"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
     android:settingsActivity="com.focusai.app.MainActivity" />

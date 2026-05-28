@@ -24,7 +24,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.focusai.app.ui.about.AboutScreen
-import com.focusai.app.ui.apps.AppManagerScreen
 import com.focusai.app.ui.focus.FocusScreen
 import com.focusai.app.ui.navigation.MainTab
 import com.focusai.app.ui.settings.SettingsScreen
@@ -32,7 +31,6 @@ import com.focusai.app.ui.stats.StatsScreen
 import com.focusai.app.ui.theme.IndigoLight
 import com.focusai.app.viewmodel.FocusViewModel
 
-private const val ROUTE_APP_MANAGER = "app_manager"
 private const val NAV_ANIM_DURATION = 280
 
 @Composable
@@ -121,18 +119,10 @@ fun FocusApp() {
                     )
             }
         ) {
-            composable(MainTab.Focus.route) {
-                FocusScreen(
-                    viewModel = focusViewModel,
-                    onNavigateAppManager = { navController.navigate(ROUTE_APP_MANAGER) }
-                )
-            }
+            composable(MainTab.Focus.route) { FocusScreen(viewModel = focusViewModel) }
             composable(MainTab.Stats.route) { StatsScreen() }
             composable(MainTab.Settings.route) { SettingsScreen() }
             composable(MainTab.About.route) { AboutScreen() }
-            composable(ROUTE_APP_MANAGER) {
-                AppManagerScreen(onBack = { navController.popBackStack() })
-            }
         }
     }
 }
