@@ -86,10 +86,10 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(text = TimeFormatter.formatTimestamp(item.timestamp))
-                            if (item.reasonDetail.isNotBlank()) {
+                            if (item.aiReason.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = item.reasonDetail,
+                                    text = item.aiReason,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -108,11 +108,8 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     DetailLine(stringResource(R.string.stats_record_time), TimeFormatter.formatTimestamp(record.timestamp))
-                    DetailLine(stringResource(R.string.stats_record_reason_detail), record.reasonDetail.ifBlank { "-" })
-                    DetailLine(
-                        stringResource(R.string.stats_record_ai_reply),
-                        record.aiReply.ifBlank { "-" }
-                    )
+                    DetailLine(stringResource(R.string.stats_record_package), record.packageName.ifBlank { "-" })
+                    DetailLine(stringResource(R.string.stats_record_reason_detail), record.aiReason.ifBlank { "-" })
                 }
             },
             confirmButton = {

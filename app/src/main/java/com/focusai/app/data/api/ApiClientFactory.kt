@@ -51,12 +51,15 @@ class ApiClientFactory(
             if (current != null && cachedUrl == baseUrl && cachedKey == apiKey) {
                 current
             } else {
+                // TODO(cloud-proxy): 未来替换为仅访问本地后端代理，不再在客户端直带第三方 Key。
                 val authClient = baseHttpClient.newBuilder()
                     .addInterceptor { chain ->
-                        val request = chain.request().newBuilder()
-                            .header("Authorization", "Bearer $apiKey")
+                        val requestBuilder = chain.request().newBuilder()
                             .header("Content-Type", "application/json")
-                            .build()
+                        if (apiKey.isNotBlank()) {
+                            requestBuilder.header("Authorization", "Bearer $apiKey")
+                        }
+                        val request = requestBuilder.build()
                         chain.proceed(request)
                     }
                     .build()

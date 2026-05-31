@@ -4,12 +4,15 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.focusai.app.FocusAiApplication
+import com.focusai.app.data.api.PremiumActivateRepository
+import com.focusai.app.data.prefs.ApiAccessMode
 import com.focusai.app.data.prefs.DEFAULT_BASE_URL
 import com.focusai.app.data.prefs.DEFAULT_MODEL
 import com.focusai.app.data.prefs.DEFAULT_PROMPT_TEMPLATE
 import com.focusai.app.data.api.ChatCompletionRequest
 import com.focusai.app.data.api.ChatMessage
 import com.focusai.app.data.api.OpenAiApi
+import com.focusai.app.data.prefs.isPremiumActive
 import com.focusai.app.util.PromptTemplateRenderer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,12 +38,22 @@ data class SettingsUiState(
     val useCustomPromptTemplate: Boolean = false,
     val promptTemplateDraft: String = DEFAULT_PROMPT_TEMPLATE,
     val promptPreview: String = DEFAULT_PROMPT_TEMPLATE,
-    val promptSavedMessage: String? = null
+    val promptSavedMessage: String? = null,
+    val activationCodeDraft: String = "",
+    val premiumActive: Boolean = false,
+    val premiumExpired: Boolean = false,
+    val premiumExpiresAtMillis: Long? = null,
+    val premiumActivating: Boolean = false,
+    val premiumTestingConnection: Boolean = false,
+    val premiumConnectionMessage: String? = null,
+    val premiumErrorMessage: String? = null
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsRepository = (application as FocusAiApplication).settingsRepository
+    private val premiumActivateRepository =
+        (application as FocusAiApplication).premiumActivateRepository
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -67,7 +80,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                             },
                             focusGoal = settings.focusGoal,
                             forbiddenTags = settings.forbiddenTags
-                        )
+                        ),
+                        premiumActive = settings.isPremiumActive(),
+                        premiumExpired = settings.apiAccessMode == ApiAccessMode.PREMIUM &&
+                            settings.premiumAppToken.isNotBlank() &&
+                            !settings.isPremiumActive(),
+                        premiumExpiresAtMillis = settings.premiumExpiresAtMillis
                     )
                 }
             }
@@ -92,6 +110,73 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             settingsRepository.saveApiSettings(state.baseUrl, state.apiKey, state.model)
             _uiState.update { it.copy(savedMessage = savedLabel) }
         }
+    }
+
+    fun updateActivationCode(value: String) {
+        _uiState.update { it.copy(activationCodeDraft = value) }
+    }
+
+    fun activatePremium(successLabel: String) {
+        viewModelScope.launch {
+            val code = _uiState.value.activationCodeDraft.trim()
+            if (code.isBlank()) {
+                _uiState.update { it.copy(premiumErrorMessage = "请输入激活码") }
+                return@launch
+            }
+            _uiState.update {
+                it.copy(
+                    premiumActivating = true,
+                    premiumErrorMessage = null
+                )
+            }
+            val outcome = runCatching {
+                premiumActivateRepository.activate(getApplication(), code)
+            }
+            outcome.fold(
+                onSuccess = {
+                    _uiState.update {
+                        it.copy(
+                            premiumActivating = false,
+                            activationCodeDraft = "",
+                            savedMessage = successLabel
+                        )
+                    }
+                },
+                onFailure = { throwable ->
+                    _uiState.update {
+                        it.copy(
+                            premiumActivating = false,
+                            premiumErrorMessage = throwable.message ?: "激活失败"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun testPremiumConnection() {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(premiumTestingConnection = true, premiumConnectionMessage = null)
+            }
+            val message = runCatching {
+                withContext(Dispatchers.IO) {
+                    premiumActivateRepository.testConnection()
+                }
+            }.getOrElse { throwable ->
+                throwable.message ?: "连接失败"
+            }
+            _uiState.update {
+                it.copy(
+                    premiumTestingConnection = false,
+                    premiumConnectionMessage = message
+                )
+            }
+        }
+    }
+
+    fun clearPremiumError() {
+        _uiState.update { it.copy(premiumErrorMessage = null) }
     }
 
     fun toggleUseCustomPrompt(enabled: Boolean) {
@@ -192,6 +277,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun createApiFromDraft(baseUrl: String, apiKey: String): OpenAiApi {
+        // TODO(cloud-proxy): 未来改为仅测试本地代理连通性，不直接携带第三方 API Key 直连。
         val client = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)

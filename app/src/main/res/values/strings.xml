@@ -17,6 +17,28 @@
     <string name="accessibility_not_granted">无障碍权限未授权</string>
     <string name="open_accessibility_settings">去授权无障碍</string>
     <string name="perm_section_title">系统权限</string>
+    <string name="app_monitor_title">应用监控名单</string>
+    <string name="app_monitor_subtitle">默认所有应用都不抓帧。只有加入黑名单的应用才会触发截图分析。</string>
+    <string name="app_monitor_whitelist_count">白名单（不监督）：%1$d 个应用</string>
+    <string name="app_monitor_blacklist_count">黑名单（监督）：%1$d 个应用</string>
+    <string name="app_monitor_blacklist_preview">当前黑名单：%1$s</string>
+    <string name="app_monitor_manage_apps">选择应用名单</string>
+    <string name="app_monitor_picker_title">选择白名单 / 黑名单</string>
+    <string name="app_monitor_search_label">搜索应用名或包名</string>
+    <string name="app_monitor_group_whitelist">白名单</string>
+    <string name="app_monitor_group_blacklist">黑名单</string>
+    <string name="app_monitor_picker_done">完成</string>
+    <string name="app_monitor_save">保存名单</string>
+    <string name="app_monitor_saved">应用监控名单已保存</string>
+    <string name="mode_selection_title">模式选择</string>
+    <string name="mode_selection_subtitle">检测到娱乐内容后，按所选模式执行干预。</string>
+    <string name="mode_option_instant_kill">直接阻断</string>
+    <string name="mode_option_custom_timeout">自定义冷静</string>
+    <string name="mode_option_ai_persuasion">AI 劝导</string>
+    <string name="mode_custom_text_label">冷静文案</string>
+    <string name="mode_custom_seconds_label">冷静倒计时（秒）</string>
+    <string name="mode_save">保存模式设置</string>
+    <string name="mode_saved">模式设置已保存</string>
 
     <!-- Stats -->
     <string name="stats_title">今日统计</string>
@@ -25,6 +47,7 @@
     <string name="stats_recent_interceptions">最近打断记录</string>
     <string name="stats_record_detail_title">打断详情</string>
     <string name="stats_record_time">时间： </string>
+    <string name="stats_record_package">应用包名： </string>
     <string name="stats_record_reason_detail">原因： </string>
     <string name="stats_record_ai_reply">AI 回复： </string>
 
@@ -36,6 +59,7 @@
     <string name="settings_api_key_hint">sk-...</string>
     <string name="settings_model">Model Name</string>
     <string name="settings_model_hint">doubao-1-5-vision-pro-32k-250115</string>
+    <string name="settings_byok_notice">BYOK 本地模式：API Key 仅保存在本机（Android KeyStore 加密后写入 DataStore）。</string>
     <string name="settings_save">保存配置</string>
     <string name="settings_saved">配置已保存</string>
     <string name="settings_test_connection">测试连接</string>
@@ -46,6 +70,21 @@
     <string name="settings_prompt_preview">当前生效提示词预览</string>
     <string name="settings_prompt_save">保存提示词设置</string>
     <string name="settings_prompt_saved">提示词设置已保存</string>
+    <string name="settings_entry_premium_mode">会员模式</string>
+    <string name="settings_entry_premium_desc">输入激活码即可使用 AI 监督，无需配置 API Key。</string>
+    <string name="settings_entry_custom_mode">自定义模式</string>
+    <string name="settings_entry_custom_desc">使用你自己的 Base URL、Model 与 API Key。</string>
+    <string name="settings_entry_advanced_prompt">高级提示词设置</string>
+    <string name="settings_entry_advanced_prompt_desc">调整 AI 判定文案模板。</string>
+    <string name="settings_premium_mode_enabled">会员激活成功</string>
+    <string name="settings_premium_activation_code">CDK 激活码</string>
+    <string name="settings_premium_activation_code_hint">请输入购买的 CDK</string>
+    <string name="settings_premium_notice">激活码仅用于兑换一次，app_token 加密保存在本机。</string>
+    <string name="settings_premium_activate">激活</string>
+    <string name="settings_premium_status_active">会员已激活</string>
+    <string name="settings_premium_status_expired">会员已过期，请输入新激活码续费。</string>
+    <string name="settings_premium_expires_never">有效期：永久</string>
+    <string name="settings_premium_expires_at">有效期至：%1$s</string>
 
     <!-- About -->
     <string name="about_title">关于</string>
@@ -64,11 +103,21 @@
     <!-- Service -->
     <string name="intercept_notification_title">唯见 打断提醒</string>
     <string name="intercept_notification_body">检测到娱乐内容，已退回桌面。今日第 %1$d 次打断。</string>
+    <string name="intercept_overlay_channel_name">拦截弹层</string>
+    <string name="intercept_overlay_channel_desc">自定义冷静 / AI 劝导模式的全屏提醒</string>
+    <string name="meta_intercept_overlay_fallback">检测到娱乐内容，点击查看拦截提示</string>
+    <string name="overlay_permission_required">自定义冷静 / AI 劝导需要「显示在其他应用上层」权限，请在系统设置中开启。</string>
     <string name="visual_supervision_notification_title">唯见 正在视觉监督</string>
-    <string name="visual_supervision_notification_body">每 4 秒抓取一帧屏幕画面交给视觉模型判定。</string>
+    <string name="visual_supervision_notification_body">根据当前前台应用动态调整抓帧频率。</string>
     <string name="visual_supervision_channel_name">视觉监督</string>
     <string name="visual_supervision_channel_description">前台服务运行状态通知，无法关闭。</string>
     <string name="visual_supervision_permission_denied">未授予屏幕录制权限，监督未启动。</string>
+    <string name="meta_intercept_title">暂停 10 秒</string>
+    <string name="meta_intercept_custom_title">冷静一下</string>
+    <string name="meta_intercept_ai_title">AI 劝导</string>
+    <string name="meta_intercept_countdown">%1$d 秒</string>
+    <string name="meta_intercept_dismiss">我冷静好了</string>
+    <string name="meta_intercept_confirm">确定</string>
 
     <!-- 监督规则卡片（首页） -->
     <string name="rules_title">监督规则</string>

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [InterceptionEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,7 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "focusai.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build().also { instance = it }
             }
         }
@@ -46,6 +46,34 @@ abstract class AppDatabase : RoomDatabase() {
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS focus_sessions")
+            }
+        }
+
+        /**
+         * v4：拦截日志收敛为最小字段集合。
+         * 不保留历史截图或冗余字段，只迁移时间、包名与原因文本。
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE interceptions RENAME TO interceptions_legacy")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS interceptions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        packageName TEXT NOT NULL,
+                        aiReason TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO interceptions(timestamp, packageName, aiReason)
+                    SELECT timestamp, packageName, COALESCE(reasonDetail, '')
+                    FROM interceptions_legacy
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE interceptions_legacy")
             }
         }
     }

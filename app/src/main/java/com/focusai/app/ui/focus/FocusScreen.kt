@@ -14,6 +14,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +25,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,14 +46,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -61,16 +66,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.focusai.app.R
+import com.focusai.app.data.prefs.InterceptionMode
 import com.focusai.app.service.VisualSupervisionService
 import com.focusai.app.ui.theme.Indigo500
 import com.focusai.app.ui.theme.IndigoLight
@@ -78,11 +88,12 @@ import com.focusai.app.ui.theme.Ink200
 import com.focusai.app.ui.theme.Ink500
 import com.focusai.app.ui.theme.Teal600
 import com.focusai.app.util.AccessibilityUtils
+import com.focusai.app.util.OverlayPermissionHelper
 import com.focusai.app.viewmodel.FocusViewModel
+import com.focusai.app.viewmodel.MonitorableApp
 
 /**
- * 首页：监督开关 + 无障碍状态 + 监督规则草稿三件事。
- * 番茄钟、应用名单等与监督主线无关的功能已删除。
+ * 首页：监督开关 + 无障碍状态 + 监督规则 + 模式选择 + 应用监控名单。
  */
 @Composable
 fun FocusScreen(viewModel: FocusViewModel = viewModel()) {
@@ -90,7 +101,13 @@ fun FocusScreen(viewModel: FocusViewModel = viewModel()) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val savedLabel = stringResource(R.string.rules_saved)
+    val modeSavedLabel = stringResource(R.string.mode_saved)
     val permissionDeniedLabel = stringResource(R.string.visual_supervision_permission_denied)
+    val overlayRequiredLabel = stringResource(R.string.overlay_permission_required)
+
+    val overlaySettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { }
 
     // 系统级"允许录屏"对话框 Launcher：
     // 用户点击开关 → launch(...) → 系统弹窗 → 同意后回到 onResult，把凭据交给前台服务。
@@ -110,6 +127,17 @@ fun FocusScreen(viewModel: FocusViewModel = viewModel()) {
         }
     }
 
+    fun startSupervisionWithChecks() {
+        if (needsOverlayPermission(uiState.selectedInterceptionMode) &&
+            !OverlayPermissionHelper.canDrawOverlays(context)
+        ) {
+            Toast.makeText(context, overlayRequiredLabel, Toast.LENGTH_LONG).show()
+            overlaySettingsLauncher.launch(OverlayPermissionHelper.createSettingsIntent(context))
+            return
+        }
+        screenCaptureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshAccessibilityStatus()
@@ -122,6 +150,12 @@ fun FocusScreen(viewModel: FocusViewModel = viewModel()) {
         uiState.rulesSavedMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             viewModel.clearRulesSavedMessage()
+        }
+    }
+    LaunchedEffect(uiState.modeSavedMessage) {
+        uiState.modeSavedMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearModeSavedMessage()
         }
     }
 
@@ -162,7 +196,7 @@ fun FocusScreen(viewModel: FocusViewModel = viewModel()) {
             accessibilityGranted = uiState.accessibilityGranted,
             onToggle = { wantEnabled ->
                 if (wantEnabled) {
-                    screenCaptureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+                    startSupervisionWithChecks()
                 } else {
                     VisualSupervisionService.stop(context)
                     viewModel.persistSupervisionEnabled(false)
@@ -183,6 +217,39 @@ fun FocusScreen(viewModel: FocusViewModel = viewModel()) {
             onForbiddenTagsChange = viewModel::updateForbiddenTagsDraft,
             onSave = { viewModel.saveRules(savedLabel) }
         )
+
+        ModeSelectionCard(
+            selectedMode = uiState.selectedInterceptionMode,
+            customCooldownText = uiState.customCooldownTextDraft,
+            customCooldownSeconds = uiState.customCooldownSecondsDraft,
+            dirty = uiState.modeDirty,
+            onModeSelected = viewModel::updateInterceptionMode,
+            onCooldownTextChange = viewModel::updateCooldownTextDraft,
+            onCooldownSecondsChange = viewModel::updateCooldownSecondsDraft,
+            onSave = {
+                viewModel.saveInterceptionMode(modeSavedLabel)
+                if (needsOverlayPermission(uiState.selectedInterceptionMode) &&
+                    !OverlayPermissionHelper.canDrawOverlays(context)
+                ) {
+                    Toast.makeText(context, overlayRequiredLabel, Toast.LENGTH_LONG).show()
+                    overlaySettingsLauncher.launch(OverlayPermissionHelper.createSettingsIntent(context))
+                }
+            }
+        )
+
+        AppMonitorCard(
+            onManageClick = viewModel::openAppMonitorDialog
+        )
+        if (uiState.appMonitorDialogVisible) {
+            AppMonitorPickerDialog(
+                apps = uiState.monitorableApps,
+                blacklist = uiState.appMonitorBlacklistDraft,
+                searchQuery = uiState.appMonitorSearchQuery,
+                onSearchChange = viewModel::updateAppMonitorSearchQuery,
+                onDismiss = viewModel::closeAppMonitorDialog,
+                onSetGroup = viewModel::setAppMonitorGroup
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
     }
@@ -271,7 +338,9 @@ private fun AccessibilityCard(
     onOpenAccessibility: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenAccessibility),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -303,8 +372,7 @@ private fun AccessibilityCard(
                 } else {
                     stringResource(R.string.accessibility_not_granted)
                 },
-                granted = accessibilityGranted,
-                onClick = onOpenAccessibility
+                granted = accessibilityGranted
             )
         }
     }
@@ -317,22 +385,12 @@ private fun PermissionRow(
     iconBg: Color,
     title: String,
     subtitle: String,
-    granted: Boolean,
-    onClick: () -> Unit
+    granted: Boolean
 ) {
-    val rowModifier = if (granted) {
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp)
-    } else {
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-    }
-
     Row(
-        modifier = rowModifier,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -371,14 +429,12 @@ private fun PermissionRow(
                 modifier = Modifier.size(20.dp)
             )
         } else {
-            TextButton(
-                onClick = onClick,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-            ) {
-                Icon(Icons.Outlined.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.open_accessibility_settings), style = MaterialTheme.typography.labelSmall)
-            }
+            Icon(
+                Icons.Outlined.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -478,5 +534,288 @@ private fun RulesCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ModeSelectionCard(
+    selectedMode: InterceptionMode,
+    customCooldownText: String,
+    customCooldownSeconds: String,
+    dirty: Boolean,
+    onModeSelected: (InterceptionMode) -> Unit,
+    onCooldownTextChange: (String) -> Unit,
+    onCooldownSecondsChange: (String) -> Unit,
+    onSave: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+            Text(
+                text = stringResource(R.string.mode_selection_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.mode_selection_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            ModeOptionRow(
+                text = stringResource(R.string.mode_option_instant_kill),
+                selected = selectedMode == InterceptionMode.INSTANT_KILL,
+                onSelect = { onModeSelected(InterceptionMode.INSTANT_KILL) }
+            )
+            ModeOptionRow(
+                text = stringResource(R.string.mode_option_custom_timeout),
+                selected = selectedMode == InterceptionMode.CUSTOM_TIMEOUT,
+                onSelect = { onModeSelected(InterceptionMode.CUSTOM_TIMEOUT) }
+            )
+            ModeOptionRow(
+                text = stringResource(R.string.mode_option_ai_persuasion),
+                selected = selectedMode == InterceptionMode.AI_PERSUASION,
+                onSelect = { onModeSelected(InterceptionMode.AI_PERSUASION) }
+            )
+
+            AnimatedVisibility(
+                visible = selectedMode == InterceptionMode.CUSTOM_TIMEOUT,
+                enter = fadeIn(tween(180)) + expandVertically(),
+                exit = fadeOut(tween(180)) + shrinkVertically()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customCooldownText,
+                        onValueChange = onCooldownTextChange,
+                        label = { Text(stringResource(R.string.mode_custom_text_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = customCooldownSeconds,
+                        onValueChange = onCooldownSecondsChange,
+                        label = { Text(stringResource(R.string.mode_custom_seconds_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        )
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = dirty,
+                enter = fadeIn(tween(200)) + expandVertically(),
+                exit = fadeOut(tween(200)) + shrinkVertically()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onSave,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Indigo500),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.mode_save), color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModeOptionRow(
+    text: String,
+    selected: Boolean,
+    onSelect: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = text, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun AppMonitorCard(
+    onManageClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+            Text(
+                text = stringResource(R.string.app_monitor_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Button(
+                onClick = onManageClick,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.app_monitor_manage_apps), color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}
+
+private fun needsOverlayPermission(mode: InterceptionMode): Boolean {
+    return mode == InterceptionMode.CUSTOM_TIMEOUT || mode == InterceptionMode.AI_PERSUASION
+}
+
+@Composable
+private fun AppMonitorPickerDialog(
+    apps: List<MonitorableApp>,
+    blacklist: Set<String>,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSetGroup: (String, Boolean) -> Unit
+) {
+    val filtered = if (searchQuery.isBlank()) {
+        apps
+    } else {
+        apps.filter {
+            it.appName.contains(searchQuery, ignoreCase = true) ||
+                it.packageName.contains(searchQuery, ignoreCase = true)
+        }
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.app_monitor_picker_title)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchChange,
+                    label = { Text(stringResource(R.string.app_monitor_search_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filtered, key = { it.packageName }) { app ->
+                        AppMonitorItemRow(
+                            app = app,
+                            isBlacklist = app.packageName in blacklist,
+                            onSetGroup = onSetGroup
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text(stringResource(R.string.app_monitor_picker_done))
+            }
+        }
+    )
+}
+
+@Composable
+private fun AppMonitorItemRow(
+    app: MonitorableApp,
+    isBlacklist: Boolean,
+    onSetGroup: (String, Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppIcon(packageName = app.packageName)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = app.appName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { onSetGroup(app.packageName, false) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!isBlacklist) Indigo500 else MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Text(
+                        text = stringResource(R.string.app_monitor_group_whitelist),
+                        color = if (!isBlacklist) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Button(
+                    onClick = { onSetGroup(app.packageName, true) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isBlacklist) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Text(
+                        text = stringResource(R.string.app_monitor_group_blacklist),
+                        color = if (isBlacklist) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppIcon(packageName: String) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val iconSizePx = remember(density) { with(density) { 28.dp.roundToPx() } }
+    val iconBitmap = remember(packageName, iconSizePx) {
+        runCatching {
+            context.packageManager
+                .getApplicationIcon(packageName)
+                .toBitmap(iconSizePx, iconSizePx)
+                .asImageBitmap()
+        }.getOrNull()
+    }
+    if (iconBitmap != null) {
+        Image(
+            bitmap = iconBitmap,
+            contentDescription = null,
+            modifier = Modifier.size(28.dp)
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant, CircleShape)
+        )
     }
 }

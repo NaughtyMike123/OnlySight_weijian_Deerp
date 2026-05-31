@@ -27,6 +27,10 @@ import androidx.core.app.NotificationCompat
 import com.focusai.app.FocusAiApplication
 import com.focusai.app.MainActivity
 import com.focusai.app.R
+import com.focusai.app.data.prefs.InterceptionMode
+import com.focusai.app.data.api.VisionDecision
+import com.focusai.app.ui.intercept.MetaInterceptionActivity
+import com.focusai.app.util.BitmapCompressUtil
 import com.focusai.app.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +42,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -47,10 +50,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 职责：
  *  1. 持有 [MediaProjection] 凭据，把整块屏幕镜像到一个 [VirtualDisplay] +
  *     [ImageReader] 组合中。
- *  2. 每 [CAPTURE_INTERVAL_MS] 毫秒抓取最新一帧，按最大边 [MAX_IMAGE_DIMENSION] 像素
- *     缩放、JPEG 压缩、Base64 编码。
- *  3. 把图片塞进多模态 Chat Completion 请求发给豆包视觉模型。
- *  4. 模型回 "1" → 调用 [FocusAccessibilityService.requestHome] 把用户踢回桌面。
+ *  2. 根据 [ForegroundCapturePolicy] 动态决定抓帧频率（4s/30s/0）。
+ *  3. 每轮抓取最新一帧，缩放至最长边 800px、JPEG(50) 压缩、Base64 编码。
+ *  4. 把图片塞进多模态 Chat Completion 请求发给豆包视觉模型。
+ *  5. 模型命中娱乐后，按用户模式执行「直接阻断 / 冷静倒计时 / AI 劝导」。
  *
  * 注意事项：
  *  - 必须以 startForegroundService 启动，并在 [onStartCommand] 的最早期调用
@@ -188,9 +191,14 @@ class VisualSupervisionService : Service() {
             // 首帧前等一拍，让 VirtualDisplay 完成首屏渲染，避免拿到全黑画面。
             delay(FIRST_FRAME_WARMUP_MS)
             while (isActive) {
-                runCatching { tickOnce() }
+                val policy = ForegroundCapturePolicy.current()
+                if (!policy.tier.shouldCapture) {
+                    delay(POLICY_RECHECK_DELAY_MS)
+                    continue
+                }
+                runCatching { tickOnce(policy) }
                     .onFailure { Log.w(TAG, "本轮截屏分析异常：${it.javaClass.simpleName}: ${it.message}") }
-                delay(CAPTURE_INTERVAL_MS)
+                delay(policy.tier.intervalMs)
             }
         }
     }
@@ -202,43 +210,140 @@ class VisualSupervisionService : Service() {
      * VLM 调用、模板渲染、JSON 拼装统统委托给 [com.focusai.app.data.api.VisionRepository]；
      * 本服务只关心"屏幕截图 → 是否需要踢桌面"这层抽象。
      */
-    private suspend fun tickOnce() {
-        val base64 = captureFrameAsBase64() ?: return
+    private suspend fun tickOnce(policy: CapturePolicyState) {
+        val snapshot = captureFrameSnapshot() ?: return
         val app = application as FocusAiApplication
 
-        val distracted = runCatching {
+        val settings = app.settingsRepository.getSettingsSnapshot()
+        val decision = runCatching {
             withTimeout(REQUEST_TIMEOUT_MS) {
-                app.visionRepository.judgeBase64Image(base64)
+                app.visionRepository.judgeBase64Image(snapshot.base64Image)
             }
         }.getOrElse { e ->
             Log.w(TAG, "VLM 调用整体异常：${e.javaClass.simpleName} - ${e.message}")
-            false
+            VisionDecision()
         }
 
-        if (distracted) {
-            Log.d(TAG, "判定为娱乐，触发回桌面。")
-            // 必须先在主线程触发 HOME，再异步落库 + 推通知，避免被打断的 App 抢到分析窗口。
-            withContext(Dispatchers.Main) { FocusAccessibilityService.requestHome() }
-            val todayCount = runCatching {
-                app.statsRepository.recordInterception(
-                    reasonType = "VLM_DISTRACTED",
-                    reasonDetail = "视觉模型判定为娱乐内容",
-                    aiReply = "1"
-                )
-            }.getOrDefault(0)
-            withContext(Dispatchers.Main) {
-                NotificationHelper.showInterceptNotification(this@VisualSupervisionService, todayCount)
+        if (decision.isEntertainment) {
+            val displayText = when (settings.interceptionMode) {
+                InterceptionMode.AI_PERSUASION -> {
+                    val persuasion = runCatching {
+                        withTimeout(PERSUASION_TIMEOUT_MS) {
+                            app.visionRepository.generatePersuasionMessage(snapshot.base64Image)
+                        }
+                    }.getOrElse { e ->
+                        Log.w(TAG, "劝导文案生成异常：${e.message}")
+                        ""
+                    }
+                    persuasion.ifBlank {
+                        decision.reason.ifBlank { "你正在浪费时间刷娱乐内容，现在立刻停下。" }
+                    }
+                }
+                else -> decision.reason.ifBlank { "AI 判定当前内容为娱乐内容。" }
             }
-            // 触发后给系统一点时间完成 HOME 动作，再继续下一轮分析。
-            delay(POST_TRIGGER_COOLDOWN_MS)
+            val intercepted = triggerInterception(
+                mode = settings.interceptionMode,
+                screenshotBytes = snapshot.jpegBytes,
+                reason = displayText,
+                customCooldownText = settings.customCooldownText,
+                customCooldownSeconds = settings.customCooldownSeconds
+            )
+            if (intercepted) {
+                Log.d(TAG, "判定为娱乐，已执行拦截。pkg=${policy.packageName} mode=${settings.interceptionMode}")
+                val todayCount = runCatching {
+                    app.statsRepository.recordInterception(
+                        packageName = policy.packageName,
+                        aiReason = displayText
+                    )
+                }.getOrDefault(0)
+                NotificationHelper.showInterceptNotification(this@VisualSupervisionService, todayCount)
+                delay(POST_TRIGGER_COOLDOWN_MS)
+            } else {
+                Log.w(TAG, "判定为娱乐，但拦截动作未成功执行。pkg=${policy.packageName}")
+            }
         }
+    }
+
+    private suspend fun triggerInterception(
+        mode: InterceptionMode,
+        screenshotBytes: ByteArray,
+        reason: String,
+        customCooldownText: String,
+        customCooldownSeconds: Int
+    ): Boolean {
+        return when (mode) {
+            InterceptionMode.INSTANT_KILL -> forceReturnHome()
+            InterceptionMode.CUSTOM_TIMEOUT,
+            InterceptionMode.AI_PERSUASION -> {
+                // 先退回桌面，避免用户仍停留在娱乐 App 内且后台 Activity 被系统拦截。
+                forceReturnHome()
+
+                val payload = InterceptionOverlayPayload(
+                    screenshotJpeg = screenshotBytes,
+                    reason = reason,
+                    mode = mode,
+                    customCooldownText = customCooldownText,
+                    customCooldownSeconds = customCooldownSeconds
+                )
+                InterceptionOverlayPayloadStore.save(payload)
+
+                if (InterceptionOverlayController.show(this, payload)) {
+                    return true
+                }
+
+                Log.w(TAG, "悬浮窗展示失败，尝试全屏通知/Activity 兜底。")
+                if (NotificationHelper.launchInterceptionFullScreen(this)) {
+                    return true
+                }
+
+                launchInterceptionActivity()
+            }
+        }
+    }
+
+    private suspend fun launchInterceptionActivity(): Boolean {
+        return withContext(Dispatchers.Main.immediate) {
+            runCatching {
+                startActivity(
+                    Intent(this@VisualSupervisionService, MetaInterceptionActivity::class.java).apply {
+                        addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                Intent.FLAG_ACTIVITY_NO_ANIMATION
+                        )
+                    }
+                )
+            }.onFailure {
+                Log.w(TAG, "拉起拦截 Activity 失败：${it.message}")
+            }.isSuccess
+        }
+    }
+
+    private suspend fun forceReturnHome(): Boolean {
+        val byAccessibility = withContext(Dispatchers.Main.immediate) {
+            FocusAccessibilityService.requestHome()
+        }
+        if (byAccessibility) return true
+
+        // 兜底：如果无障碍服务短暂失联，直接拉起系统桌面。
+        return runCatching {
+            startActivity(
+                Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }.onFailure {
+            Log.e(TAG, "HOME 兜底失败：${it.message}")
+        }.isSuccess
     }
 
     /**
      * 从 ImageReader 取最新一帧 → 转 Bitmap → 缩放 → JPEG → Base64。
      * 全程同步执行；调用方位于 IO 协程，因此可以放心做位图操作。
      */
-    private fun captureFrameAsBase64(): String? {
+    private fun captureFrameSnapshot(): FrameSnapshot? {
         val reader = imageReader ?: return null
         val image: Image = runCatching { reader.acquireLatestImage() }
             .getOrNull() ?: return null
@@ -262,34 +367,19 @@ class VisualSupervisionService : Service() {
                 c
             }
 
-            // 按最大边缩放到 MAX_IMAGE_DIMENSION，控制体积与 token 消耗。
-            val scaled = scaleDown(cropped, MAX_IMAGE_DIMENSION)
-            if (scaled !== cropped) cropped.recycle()
-
-            // JPEG 压缩 + Base64 编码（NO_WRAP 避免换行污染 URL）。
-            val bytes = ByteArrayOutputStream(64 * 1024).use { baos ->
-                scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, baos)
-                baos.toByteArray()
-            }
-            scaled.recycle()
-            return Base64.encodeToString(bytes, Base64.NO_WRAP)
+            // 最长边 800px、JPEG quality 50，控制上传体积。
+            val jpegBytes = BitmapCompressUtil.compressToJpegBytes(cropped)
+            cropped.recycle()
+            return FrameSnapshot(
+                base64Image = Base64.encodeToString(jpegBytes, Base64.NO_WRAP),
+                jpegBytes = jpegBytes
+            )
         } catch (t: Throwable) {
             Log.w(TAG, "捕获/压缩帧异常：${t.message}")
             return null
         } finally {
             runCatching { image.close() }
         }
-    }
-
-    private fun scaleDown(source: Bitmap, maxDim: Int): Bitmap {
-        val w = source.width
-        val h = source.height
-        val longest = maxOf(w, h)
-        if (longest <= maxDim) return source
-        val ratio = maxDim.toFloat() / longest
-        val targetW = (w * ratio).toInt().coerceAtLeast(1)
-        val targetH = (h * ratio).toInt().coerceAtLeast(1)
-        return Bitmap.createScaledBitmap(source, targetW, targetH, true)
     }
 
     private fun readScreenMetrics() {
@@ -385,23 +475,20 @@ class VisualSupervisionService : Service() {
         private const val VIRTUAL_DISPLAY_NAME = "OnlySightVirtualDisplay"
         private const val IMAGE_READER_QUEUE_DEPTH = 2
 
-        /** 截屏分析周期（毫秒）。任务书要求约 4 秒一次。 */
-        private const val CAPTURE_INTERVAL_MS = 4_000L
-
         /** 首次抓帧前的暖机时间，避免拿到全黑首屏。 */
         private const val FIRST_FRAME_WARMUP_MS = 1_500L
+
+        /** 白名单/安全窗口下不抓帧，循环仅用于刷新策略。 */
+        private const val POLICY_RECHECK_DELAY_MS = 1_500L
 
         /** 触发 HOME 后等待一会儿再继续，防止刚返桌面又把桌面图截给 VLM 形成抖动。 */
         private const val POST_TRIGGER_COOLDOWN_MS = 5_000L
 
         /** 单次 VLM 请求超时。 */
-        private const val REQUEST_TIMEOUT_MS = 20_000L
+        private const val REQUEST_TIMEOUT_MS = 30_000L
 
-        /** 缩放后最大边像素，控制图片体积与 VLM token 成本。 */
-        private const val MAX_IMAGE_DIMENSION = 512
-
-        /** JPEG 编码质量。512px 边长下 60~75 已足够 VLM 识别。 */
-        private const val JPEG_QUALITY = 70
+        /** AI 劝导文案生成超时。 */
+        private const val PERSUASION_TIMEOUT_MS = 30_000L
 
         /**
          * 当前服务是否在运行。UI 层可用作开关状态显示。
@@ -439,3 +526,8 @@ class VisualSupervisionService : Service() {
         }
     }
 }
+
+private data class FrameSnapshot(
+    val base64Image: String,
+    val jpegBytes: ByteArray
+)

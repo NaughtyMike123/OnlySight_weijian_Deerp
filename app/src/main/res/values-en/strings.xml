@@ -17,6 +17,28 @@
     <string name="accessibility_not_granted">Accessibility not granted</string>
     <string name="open_accessibility_settings">Grant accessibility</string>
     <string name="perm_section_title">System Permission</string>
+    <string name="app_monitor_title">App Monitor List</string>
+    <string name="app_monitor_subtitle">All apps are ignored by default. Only blacklisted apps trigger screenshot analysis.</string>
+    <string name="app_monitor_whitelist_count">Whitelist (not monitored): %1$d apps</string>
+    <string name="app_monitor_blacklist_count">Blacklist (monitored): %1$d apps</string>
+    <string name="app_monitor_blacklist_preview">Blacklisted now: %1$s</string>
+    <string name="app_monitor_manage_apps">Choose app list</string>
+    <string name="app_monitor_picker_title">Select whitelist / blacklist</string>
+    <string name="app_monitor_search_label">Search app name or package</string>
+    <string name="app_monitor_group_whitelist">Whitelist</string>
+    <string name="app_monitor_group_blacklist">Blacklist</string>
+    <string name="app_monitor_picker_done">Done</string>
+    <string name="app_monitor_save">Save monitor list</string>
+    <string name="app_monitor_saved">App monitor list saved</string>
+    <string name="mode_selection_title">Mode Selection</string>
+    <string name="mode_selection_subtitle">When entertainment is detected, intervention follows the selected mode.</string>
+    <string name="mode_option_instant_kill">Instant Kill</string>
+    <string name="mode_option_custom_timeout">Custom Timeout</string>
+    <string name="mode_option_ai_persuasion">AI Persuasion</string>
+    <string name="mode_custom_text_label">Cooldown message</string>
+    <string name="mode_custom_seconds_label">Cooldown seconds</string>
+    <string name="mode_save">Save mode settings</string>
+    <string name="mode_saved">Mode settings saved</string>
 
     <!-- Stats -->
     <string name="stats_title">Today\'s Stats</string>
@@ -25,6 +47,7 @@
     <string name="stats_recent_interceptions">Recent interruptions</string>
     <string name="stats_record_detail_title">Interception detail</string>
     <string name="stats_record_time">Time: </string>
+    <string name="stats_record_package">Package: </string>
     <string name="stats_record_reason_detail">Reason: </string>
     <string name="stats_record_ai_reply">AI reply: </string>
 
@@ -36,6 +59,7 @@
     <string name="settings_api_key_hint">sk-...</string>
     <string name="settings_model">Model Name</string>
     <string name="settings_model_hint">doubao-1-5-vision-pro-32k-250115</string>
+    <string name="settings_byok_notice">BYOK local mode: API Key stays on-device (encrypted by Android KeyStore before DataStore).</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Settings saved</string>
     <string name="settings_test_connection">Test connection</string>
@@ -46,6 +70,21 @@
     <string name="settings_prompt_preview">Effective prompt preview</string>
     <string name="settings_prompt_save">Save prompt settings</string>
     <string name="settings_prompt_saved">Prompt settings saved</string>
+    <string name="settings_entry_premium_mode">Premium Mode</string>
+    <string name="settings_entry_premium_desc">Enter an activation code for AI supervision — no API Key needed.</string>
+    <string name="settings_entry_custom_mode">Custom BYOK Mode</string>
+    <string name="settings_entry_custom_desc">Use your own Base URL, Model, and API Key.</string>
+    <string name="settings_entry_advanced_prompt">Advanced Prompt Settings</string>
+    <string name="settings_entry_advanced_prompt_desc">Tune the AI prompt template.</string>
+    <string name="settings_premium_mode_enabled">Premium activated</string>
+    <string name="settings_premium_activation_code">CDK activation code</string>
+    <string name="settings_premium_activation_code_hint">Enter your CDK</string>
+    <string name="settings_premium_notice">CDK is used once; app_token is stored encrypted on device.</string>
+    <string name="settings_premium_activate">Activate</string>
+    <string name="settings_premium_status_active">Premium active</string>
+    <string name="settings_premium_status_expired">Premium expired. Enter a new activation code.</string>
+    <string name="settings_premium_expires_never">Valid: lifetime</string>
+    <string name="settings_premium_expires_at">Valid until: %1$s</string>
 
     <!-- About -->
     <string name="about_title">About</string>
@@ -64,11 +103,21 @@
     <!-- Service -->
     <string name="intercept_notification_title">OnlySight interruption</string>
     <string name="intercept_notification_body">Entertainment detected. Returned to home. #%1$d today.</string>
+    <string name="intercept_overlay_channel_name">Interception overlay</string>
+    <string name="intercept_overlay_channel_desc">Full-screen alerts for Custom Timeout / AI Persuasion</string>
+    <string name="meta_intercept_overlay_fallback">Entertainment detected. Tap to view interception prompt.</string>
+    <string name="overlay_permission_required">Custom Timeout / AI Persuasion need \"Display over other apps\". Please enable it in system settings.</string>
     <string name="visual_supervision_notification_title">OnlySight visual supervision</string>
-    <string name="visual_supervision_notification_body">Capturing one frame every 4s for the vision model.</string>
+    <string name="visual_supervision_notification_body">Capture frequency is adjusted dynamically by foreground app risk.</string>
     <string name="visual_supervision_channel_name">Visual supervision</string>
     <string name="visual_supervision_channel_description">Foreground service status, cannot be disabled while running.</string>
     <string name="visual_supervision_permission_denied">Screen-capture permission denied; supervision did not start.</string>
+    <string name="meta_intercept_title">Pause for 10 seconds</string>
+    <string name="meta_intercept_custom_title">Take a break</string>
+    <string name="meta_intercept_ai_title">AI Persuasion</string>
+    <string name="meta_intercept_countdown">%1$d s</string>
+    <string name="meta_intercept_dismiss">I am calm now</string>
+    <string name="meta_intercept_confirm">Confirm</string>
 
     <!-- Rules card (home) -->
     <string name="rules_title">Supervision Rules</string>

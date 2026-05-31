@@ -3,14 +3,14 @@
     无障碍服务配置（视觉版）：
     - 不再扫描 typeWindowContentChanged / typeWindowStateChanged 抓取文本
     - 仅订阅一个最轻量的事件类型，保证框架愿意绑定服务
-    - canRetrieveWindowContent=false，关闭节点树读取
-    - 服务唯一职责：执行 performGlobalAction(GLOBAL_ACTION_HOME)
+    - 为了识别 FLAG_SECURE，需要读取窗口元数据（不是节点文本）
+    - 服务职责：动态捕获策略 + 执行 GLOBAL_ACTION_HOME
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault"
-    android:canRetrieveWindowContent="false"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
     android:canPerformGestures="false"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"

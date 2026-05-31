@@ -3,28 +3,49 @@ package com.focusai.app.service
 import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
+import com.focusai.app.FocusAiApplication
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 /**
  * 视觉监督版无障碍服务。
  *
- * 设计变更说明：
- * - 旧版本会监听 TYPE_WINDOW_STATE_CHANGED / TYPE_WINDOW_CONTENT_CHANGED，DFS 抓取
- *   节点文本，再走文本 LLM 判断娱乐性。重构后这一整套被彻底废弃。
- * - 现在本服务唯一的职责是：被 [VisualSupervisionService] 在视觉模型判定为娱乐时
- *   调用 [requestHome]，执行系统级"回桌面"动作（performGlobalAction(GLOBAL_ACTION_HOME)）。
- * - 之所以仍然保留无障碍服务，是因为只有无障碍服务才能在任意前台 App 中拿到
- *   系统返桌面的权限——前台 Service 自己是做不到的。
+ * 当前职责：
+ * 1) 监听 event.packageName，驱动 [ForegroundCapturePolicy] 状态机（4s/30s/0）。
+ * 2) 在拦截倒计时结束后执行 HOME 动作（performGlobalAction）。
  */
 class FocusAccessibilityService : AccessibilityService() {
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var settingsSyncJob: Job? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
         Log.d(TAG, "无障碍服务已连接，等待来自视觉监督服务的 HOME 指令。")
+        val app = application as FocusAiApplication
+        settingsSyncJob?.cancel()
+        settingsSyncJob = serviceScope.launch {
+            app.settingsRepository.settingsFlow.collectLatest { settings ->
+                ForegroundCapturePolicy.updateMonitorLists(
+                    blacklist = settings.appMonitorBlacklist,
+                    whitelist = settings.appMonitorWhitelist
+                )
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // 视觉路径下完全不消费事件，无需任何文本扫描。
+        val evt = event ?: return
+        val packageName = evt.packageName?.toString().orEmpty()
+        if (packageName.isBlank()) return
+        val secureWindow = isSecureWindow(evt.windowId)
+        ForegroundCapturePolicy.update(packageName, secureWindow)
     }
 
     override fun onInterrupt() {
@@ -34,6 +55,8 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         Log.d(TAG, "onDestroy: 无障碍服务销毁。")
         if (instance === this) instance = null
+        settingsSyncJob?.cancel()
+        serviceScope.cancel()
         super.onDestroy()
     }
 
@@ -41,9 +64,14 @@ class FocusAccessibilityService : AccessibilityService() {
      * 在主线程执行 GLOBAL_ACTION_HOME。
      * 此方法供 [VisualSupervisionService] 跨服务调用。
      */
-    private fun performHomeAction() {
-        runCatching { performGlobalAction(GLOBAL_ACTION_HOME) }
+    private fun performHomeAction(): Boolean {
+        val result = runCatching { performGlobalAction(GLOBAL_ACTION_HOME) }
             .onFailure { Log.w(TAG, "执行 GLOBAL_ACTION_HOME 失败：${it.message}") }
+            .getOrDefault(false)
+        if (!result) {
+            Log.w(TAG, "performGlobalAction 返回 false，可能被系统拦截。")
+        }
+        return result
     }
 
     companion object {
@@ -72,8 +100,30 @@ class FocusAccessibilityService : AccessibilityService() {
          * 在部分 ROM 上要求主线程。若服务尚未被系统绑定（用户没授权），
          * 调用会安全地什么都不做。
          */
-        fun requestHome() {
-            instance?.performHomeAction()
+        fun requestHome(): Boolean {
+            return instance?.performHomeAction() == true
         }
+    }
+
+    /**
+     * FLAG_SECURE 兼容检测：
+     * - 新系统可直接反射 `AccessibilityWindowInfo#isSecure`。
+     * - 老系统没有该 API 时降级为 false。
+     */
+    private fun isSecureWindow(windowId: Int): Boolean {
+        val matched = windows.firstOrNull { it.id == windowId && it.isActiveOrFocusedCompat() }
+            ?: windows.firstOrNull { it.isActiveOrFocusedCompat() }
+        return matched?.isSecureCompat() == true
+    }
+
+    private fun AccessibilityWindowInfo.isActiveOrFocusedCompat(): Boolean {
+        return isActive || isFocused || isAccessibilityFocused
+    }
+
+    private fun AccessibilityWindowInfo.isSecureCompat(): Boolean {
+        return runCatching {
+            val method = javaClass.getMethod("isSecure")
+            method.invoke(this) as? Boolean ?: false
+        }.getOrDefault(false)
     }
 }

@@ -12,21 +12,53 @@ enum class AppLanguage(val storageValue: String) {
     }
 }
 
+enum class InterceptionMode(val storageValue: String) {
+    INSTANT_KILL("instant_kill"),
+    CUSTOM_TIMEOUT("custom_timeout"),
+    AI_PERSUASION("ai_persuasion");
+
+    companion object {
+        fun fromStorage(value: String): InterceptionMode {
+            return entries.find { it.storageValue == value } ?: INSTANT_KILL
+        }
+    }
+}
+
+enum class ApiAccessMode(val storageValue: String) {
+    PREMIUM("premium"),
+    CUSTOM("custom");
+
+    companion object {
+        fun fromStorage(value: String): ApiAccessMode {
+            return entries.find { it.storageValue == value } ?: CUSTOM
+        }
+    }
+}
+
 data class AppSettings(
     val baseUrl: String = DEFAULT_BASE_URL,
     val apiKey: String = "",
     val model: String = DEFAULT_MODEL,
+    val apiAccessMode: ApiAccessMode = ApiAccessMode.CUSTOM,
+    val premiumAppToken: String = "",
+    val premiumExpiresAtMillis: Long? = null,
     val supervisionEnabled: Boolean = false,
     val language: AppLanguage = AppLanguage.SYSTEM,
     val focusGoal: String = DEFAULT_FOCUS_GOAL,
     val forbiddenTags: String = DEFAULT_FORBIDDEN_TAGS,
     val useCustomPromptTemplate: Boolean = false,
-    val customPromptTemplate: String = DEFAULT_PROMPT_TEMPLATE
+    val customPromptTemplate: String = DEFAULT_PROMPT_TEMPLATE,
+    val appMonitorBlacklist: Set<String> = emptySet(),
+    val appMonitorWhitelist: Set<String> = emptySet(),
+    val interceptionMode: InterceptionMode = InterceptionMode.INSTANT_KILL,
+    val customCooldownText: String = DEFAULT_CUSTOM_COOLDOWN_TEXT,
+    val customCooldownSeconds: Int = DEFAULT_CUSTOM_COOLDOWN_SECONDS
 )
 
 // 视觉版默认指向火山方舟（豆包）OpenAI 兼容端点。
 // 注意末尾的 `/`，Retrofit 拼接相对路径 `chat/completions` 时必须保留。
 const val DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3/"
+const val PREMIUM_PROXY_BASE_URL = "https://api.deerp.site/"
 
 /**
  * 默认模型名。
@@ -56,7 +88,7 @@ const val DEFAULT_FORBIDDEN_TAGS = "鬼畜, 美女, 搞笑段子, 游戏直播, 
  *
  * 关键设计：
  * - 直接面向"截屏图像"判定，不依赖任何文本前置标签（旧版的 `[当前场景: ...]` 已废除）。
- * - 强制只输出一个数字字符 `0` / `1`，方便后台稳定解析。
+ * - 优先输出 JSON：`{"is_entertainment": true/false, "reason": "..."}`
  * - 支持两个占位符 `{focusGoal}` 与 `{forbiddenTags}`，由 [com.focusai.app.util.PromptTemplateRenderer] 在
  *   发送给模型前替换为用户配置的真实文本。
  *
@@ -73,4 +105,33 @@ const val DEFAULT_PROMPT_TEMPLATE = """你是一个极其严格的防沉迷监�
 3. 截图中只要出现禁止标签词，即使是浏览/搜索场景也从严判断为 1
 4. 中性场景（桌面、系统设置、消息聊天列表）→ 回复 0
 
-输出格式：只回复一个数字字符 '0' 或 '1'，不要输出任何其他内容、标点或解释。"""
+输出格式（严格 JSON）：
+{"is_entertainment": true/false, "reason": "一句话说明触发依据"}
+
+约束：
+- 只输出 JSON，不要加 markdown 代码块
+- `reason` 必须是中文，长度不超过 40 个字
+- 无法判断时从严返回 `is_entertainment=false` 并写出原因"""
+
+const val DEFAULT_CUSTOM_COOLDOWN_TEXT = "暂停一下，先呼吸 10 秒，再决定是否继续。"
+const val DEFAULT_CUSTOM_COOLDOWN_SECONDS = 10
+
+fun AppSettings.isPremiumActive(nowMillis: Long = System.currentTimeMillis()): Boolean {
+    if (apiAccessMode != ApiAccessMode.PREMIUM || premiumAppToken.isBlank()) return false
+    val expiresAt = premiumExpiresAtMillis ?: return true
+    return nowMillis < expiresAt
+}
+
+/**
+ * AI 劝导模式专用提示词：基于截图生成一段严厉但克制的劝导语。
+ */
+const val DEFAULT_PERSUASION_PROMPT_TEMPLATE = """你是用户的自律教练。请根据这张手机屏幕截图，写一段严厉但克制的劝导语，阻止用户继续刷娱乐内容。
+
+用户专注目标：{focusGoal}
+用户不想看的内容：{forbiddenTags}
+
+要求：
+1. 直接指出截图里正在做什么（例如刷短视频、看直播、玩游戏）
+2. 语气严厉、有压迫感，但不要辱骂
+3. 只输出劝导语正文，不要 JSON，不要 markdown
+4. 中文，60 字以内，结尾用一句短命令（例如「现在放下手机」）"""

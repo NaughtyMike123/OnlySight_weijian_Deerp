@@ -40,15 +40,13 @@ class StatsRepository(private val statsDao: StatsDao) {
      * 顺便清理 30 天前的旧记录，避免数据库无限增长。
      */
     suspend fun recordInterception(
-        reasonType: String = "",
-        reasonDetail: String = "",
-        aiReply: String = ""
+        packageName: String = "",
+        aiReason: String = ""
     ): Int {
         statsDao.insertInterception(
             InterceptionEntity(
-                reasonType = reasonType,
-                reasonDetail = reasonDetail,
-                aiReply = aiReply
+                packageName = packageName,
+                aiReason = aiReason
             )
         )
         val thirtyDaysAgo = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
